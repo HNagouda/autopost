@@ -25,13 +25,19 @@ struct TextStyleControls<Trailing: View>: View {
     // Reference width for showing font size in pixels, the Instagram export width.
     private static var referenceWidth: Double { 1080 }
 
+    // Read fresh each time rather than kept, so a font installed while the app is open shows up straight away.
+    private static var otherFamilies: [String] {
+        let favorites = Set(favoriteFamilies)
+        return NSFontManager.shared.availableFontFamilies.filter { !favorites.contains($0) && !$0.hasPrefix(".") }
+    }
+
     var body: some View {
         Picker("Font", selection: $fontFamily) {
             ForEach(Self.favoriteFamilies, id: \.self) { family in
                 Text(family == TextBox.systemFontFamily ? "System (SF Pro)" : family).tag(family)
             }
             Divider()
-            ForEach(InstalledFonts.otherFamilies, id: \.self) { Text($0).tag($0) }
+            ForEach(Self.otherFamilies, id: \.self) { Text($0).tag($0) }
         }
 
         LabeledContent("Size") {
@@ -59,12 +65,4 @@ extension TextStyleControls where Trailing == EmptyView {
     init(fontFamily: Binding<String>, size: Binding<Double>, isBold: Binding<Bool>, isItalic: Binding<Bool>, tracking: Binding<Double>) {
         self.init(fontFamily: fontFamily, size: size, isBold: isBold, isItalic: isItalic, tracking: tracking) { EmptyView() }
     }
-}
-
-// Generic types cannot hold stored statics, so the font list lives here; it is read once, on first use.
-private enum InstalledFonts {
-    static let otherFamilies: [String] = {
-        let favorites = Set(TextStyleControls<EmptyView>.favoriteFamilies)
-        return NSFontManager.shared.availableFontFamilies.filter { !favorites.contains($0) && !$0.hasPrefix(".") }
-    }()
 }
