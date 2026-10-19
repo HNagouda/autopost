@@ -6,22 +6,30 @@ You group photos into posts, pick an aspect ratio per post, and export the whole
 
 ## How the preview stays honest
 
-`FrameLayout` decides where the photo and caption sit on the canvas. The grid, the phone preview and the exporter all call it with the same settings, so what you see in the app is what gets written. Sizes like the border, shadow and caption are fractions of the canvas width, which is why a frame looks the same at 1080 px and at full resolution.
+`FrameLayout` decides where the photo and caption sit on the canvas. The grid, the phone preview and the exporter all call it with the same settings, so what you see in the app is what gets written. Sizes like the border, shadow and caption are fractions of the canvas width, which is why a frame looks the same at 1080 px and at full resolution. Text boxes follow the same rule through `TextBoxRenderer`, which lays text out on a fixed 1000-unit canvas and scales it. Fonts like SF change shape between sizes, so measuring at the real size would make the export wider or narrower than the preview.
 
 ## Layout
 
 ```
 Package.swift                  SwiftPM package, one library and one app target
 Sources/AutopostCore/          everything that can run without a window
-  FrameSettings.swift          aspect ratios, border, background, caption settings
+  AspectRatio.swift            built-in ratios, saved ratios, and the ratios the Instagram feed allows
+  FrameSettings.swift          border, background and caption settings, plus per-photo adjustments
   FrameLayout.swift            photo and caption rects on the canvas
+  TextBox.swift                text boxes and the Core Text code that lays them out and draws them
+  TextSnapping.swift           the grid and guide lines a dragged text box snaps to
   ImageSource.swift            ImageIO decoding (JPEG, HEIC, TIFF, camera RAW) and EXIF
   FrameRenderer.swift          draws the framed image in sRGB with Core Graphics
   PostExporter.swift           numbered JPEGs per post, a few photos in parallel
-  Library.swift                posts, photos, presets, export settings
+  Library.swift                posts, photos, presets, export settings, Recently Deleted
+  CodableDefaults.swift        lets a library saved by an older version still load
   InstagramAPI.swift           profile, recent posts and token refresh from graph.instagram.com
 Sources/Autopost/              the SwiftUI app
   LibraryStore.swift           the library, saved to ~/Library/Application Support/Autopost/library.json
+  LibraryBackups.swift         timestamped copies of library.json in the Backups folder next to it
+  PhotoEditorView.swift        one photo, large, with its text boxes and a filmstrip
+  TextBoxOverlay.swift         selecting, dragging and snapping text boxes on the editor canvas
+  PhotoInspector.swift         the open photo's own border and position, and text box styling
   ThumbnailStore.swift         preview images, decoded once off the main thread
   ExportController.swift       runs exports, then reveals them in Finder or sends them with AirDrop
   PostGridView.swift           the photos of a post, framed, drag to reorder
@@ -39,9 +47,14 @@ scripts/make-icon.sh           regenerates Resources/AppIcon.icns
 1. Drop folders onto the sidebar. Each folder becomes a post named after it; loose files become one new post.
 2. Pick a ratio and border in the inspector. 4:5 (1080 × 1350) is the safe feed default, and 3:4 (1080 × 1440) matches the profile grid tile.
 3. Open the phone preview (⌥⌘P) to swipe through the carousel and see the profile grid crop, in light or dark mode.
-4. Export with ⌘E, or right-click a post and pick "Export Post As" to switch the ratio and export in one step. "Export and AirDrop" sends the files straight to your phone.
+4. Double-click a photo to open it in the editor. There you can give that photo its own border and position, and add text boxes (⌘T). Drag a box and it snaps to a 12-column grid, the photo's edges and the middle of the border; hold Shift to place it freely. A new box copies the last one you placed, in the same spot, so repeated text lines up across the carousel. ⌘C and ⌘V copy a box between photos, and "Copy to All Photos" puts it on every slide.
+5. Export with ⌘E, or right-click a post and pick "Export Post As" to switch the ratio and export in one step. "Export and AirDrop" sends the files straight to your phone.
 
 Exports go to `~/Pictures/Autopost Exports/<post name>/` as `<post-name>-01.jpg` and onwards. Re-exporting a post replaces its numbered files, so a post that shrank does not leave old slides behind.
+
+Any custom ratio, like 32:9, can be saved with the Save button next to the custom fields, and then shows up in the picker and in "Export Post As". Ratios outside 4:5 to 1.91:1 get a warning, because Instagram crops feed posts to that range.
+
+A deleted post goes to Recently Deleted at the bottom of the sidebar and stays restorable for 30 days. On top of that, Autopost copies `library.json` into `Backups/` at least every 10 minutes while you work and before every delete or restore, keeping the newest 50. File > Restore from Backup lists them.
 
 #! NOTE[raw] : RAW files are decoded with Apple's default processing, not your Lightroom edits
 
