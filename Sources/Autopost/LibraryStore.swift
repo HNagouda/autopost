@@ -22,8 +22,7 @@ final class LibraryStore {
     private var saveTask: Task<Void, Never>?
 
     init() {
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Autopost", isDirectory: true)
+        let folder = Self.libraryFolder()
         fileURL = folder.appendingPathComponent("library.json")
         backups = LibraryBackups(folder: folder.appendingPathComponent("Backups", isDirectory: true))
         library = Self.load(from: fileURL)
@@ -32,6 +31,15 @@ final class LibraryStore {
         backups.snapshot(fileURL)
         let cutoff = Date().addingTimeInterval(-Self.deletedRetention)
         library.deletedPosts.removeAll { $0.deletedAt < cutoff }
+    }
+
+    /// Application Support/Autopost, or AUTOPOST_LIBRARY_DIR, so a development build can run against a throwaway library.
+    private static func libraryFolder() -> URL {
+        if let override = ProcessInfo.processInfo.environment["AUTOPOST_LIBRARY_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Autopost", isDirectory: true)
     }
 
     var selectedPost: Post? {
