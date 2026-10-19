@@ -1,0 +1,41 @@
+name: Dev build
+
+# Every push to dev replaces the "dev" prerelease with a fresh build, so there is always one to download and try.
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  dev-build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Test
+        run: swift test
+      - name: Pick version
+        id: version
+        # The version main would release next, marked as a dev build of this commit, like 1.0.3-dev.a1b2c3d.
+        run: echo "version=$(./scripts/next-version.sh)-dev.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build app bundle
+        run: VERSION="${{ steps.version.outputs.version }}" ./scripts/build-app.sh
+      - name: Zip app
+        run: ditto -c -k --keepParent build/Autopost.app Autopost-dev.zip
+      - name: Replace the dev prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view dev > /dev/null 2>&1; then
+            gh release delete dev --cleanup-tag --yes
+          fi
+          gh release create dev Autopost-dev.zip --prerelease --target "$GITHUB_SHA" \
+            --title "Dev build ${{ steps.version.outputs.version }}" \
+            --notes "Latest build of the dev branch, commit $GITHUB_SHA. Not a release; it changes with every push to dev."

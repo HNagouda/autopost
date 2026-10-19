@@ -1,26 +1,38 @@
 name: Release
 
-# Pushing a tag like v1.2 builds Autopost.app and attaches it to a GitHub release.
+# Every push to main, which in practice is a merge from dev, publishes the next version, like v1.0.3.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: write
+
+# Two merges in quick succession must not both claim the same version number.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history and tags, so next-version.sh can see which versions already exist.
+          fetch-depth: 0
       - name: Test
         run: swift test
+      - name: Pick version
+        id: version
+        run: echo "version=$(./scripts/next-version.sh)" >> "$GITHUB_OUTPUT"
       - name: Build app bundle
-        run: VERSION="${GITHUB_REF_NAME#v}" ./scripts/build-app.sh
+        run: VERSION="${{ steps.version.outputs.version }}" ./scripts/build-app.sh
       # ditto keeps the bundle's extended attributes and signature intact, which plain zip does not.
       - name: Zip app
-        run: ditto -c -k --keepParent build/Autopost.app "Autopost-${GITHUB_REF_NAME}.zip"
+        run: ditto -c -k --keepParent build/Autopost.app "Autopost-v${{ steps.version.outputs.version }}.zip"
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "Autopost-${GITHUB_REF_NAME}.zip" --title "Autopost $GITHUB_REF_NAME" --generate-notes
+          TAG: v${{ steps.version.outputs.version }}
+        run: gh release create "$TAG" "Autopost-$TAG.zip" --target "$GITHUB_SHA" --title "Autopost $TAG" --generate-notes
