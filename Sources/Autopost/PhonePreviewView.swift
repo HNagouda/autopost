@@ -25,6 +25,7 @@ struct PhonePreviewView: View {
     static let cornerRadius = 55.0
 
     @Environment(LibraryStore.self) private var store
+    @Environment(InstagramAccount.self) private var instagram
     @AppStorage("phoneScreen") private var screen = PhoneScreen.feed
     @AppStorage("phoneScheme") private var scheme = PhoneScheme.light
     @AppStorage("phoneHandle") private var handle = "your.handle"
@@ -64,19 +65,24 @@ struct PhonePreviewView: View {
             .fixedSize()
             .help("What followers in light or dark mode will see")
 
-            TextField("Handle", text: $handle)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 140)
+            // A connected account shows its real username, so there is nothing to type.
+            if !instagram.isConnected {
+                TextField("Handle", text: $handle)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 140)
+            }
         }
     }
 
     private var phoneBody: some View {
-        VStack(spacing: 0) {
+        let shownHandle = instagram.profile?.username ?? handle
+
+        return VStack(spacing: 0) {
             PhoneStatusBar()
             Group {
                 switch screen {
-                case .feed: FeedScreen(handle: handle)
-                case .profile: ProfileScreen(handle: handle)
+                case .feed: FeedScreen(handle: shownHandle)
+                case .profile: ProfileScreen(handle: shownHandle)
                 }
             }
             .frame(maxHeight: .infinity)
