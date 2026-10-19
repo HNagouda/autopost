@@ -33,9 +33,7 @@ struct PhotoEditorView: View {
         .focused($isCanvasFocused)
         .onAppear { isCanvasFocused = true }
         .onExitCommand { editor.close() }
-        .onDeleteCommand { deleteSelectedBox() }
-        .onCopyCommand { copySelectedBox() }
-        .onPasteCommand(of: [.plainText]) { _ in paste() }
+        .onDeleteCommand { editor.deleteSelectedBox(in: store, postID: postID) }
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             arrowKey(press.key, isShifted: press.modifiers.contains(.shift))
         }
@@ -61,13 +59,13 @@ struct PhotoEditorView: View {
                 .frame(width: width, height: width / ratio)
                 .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                 .overlay {
-                    TextBoxOverlay(postID: postID, photo: photo, layout: layout, onInteract: { isCanvasFocused = true })
+                    TextBoxOverlay(postID: postID, photo: photo, layout: layout, onInteract: focusCanvas)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     editor.select(nil)
-                    isCanvasFocused = true
+                    focusCanvas()
                 }
                 .contextMenu { canvasMenu(photo: photo) }
         }
@@ -76,42 +74,26 @@ struct PhotoEditorView: View {
     @ViewBuilder
     private func canvasMenu(photo: Photo) -> some View {
         Button("Add Text Box") { editor.addTextBox(in: store, postID: postID) }
-        Button("Paste") { paste() }
+        Button("Paste") { editor.paste(in: store, postID: postID) }
         Divider()
         Toggle("Show Grid", isOn: Binding(get: { editor.isShowingGrid }, set: { editor.isShowingGrid = $0 }))
+    }
+
+    /// Takes the cursor out of any inspector text field, so ⌘C and ⌘V act on text boxes again.
+    private func focusCanvas() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        isCanvasFocused = true
     }
 
     // * ====================================================================
     // * === actions
     // * ====================================================================
 
-    private func selectedBox() -> TextBox? {
-        guard let photoID = editor.photoID, let boxID = editor.selectedTextBoxID else { return nil }
-        return store.photo(photoID, in: postID)?.textBoxes.first { $0.id == boxID }
-    }
-
-    private func deleteSelectedBox() {
-        guard let photoID = editor.photoID, let boxID = editor.selectedTextBoxID else { return }
-        store.deleteTextBox(boxID, on: photoID, in: postID)
-        editor.select(nil)
-    }
-
-    private func copySelectedBox() -> [NSItemProvider] {
-        if let box = selectedBox() { store.copyTextBoxToPasteboard(box) }
-        // The pasteboard is already written; returning nothing keeps SwiftUI from replacing it.
-        return []
-    }
-
-    private func paste() {
-        guard let photoID = editor.photoID else { return }
-        if let id = store.pasteTextBox(onto: photoID, in: postID) { editor.select(id) }
-    }
-
     /// Nudges the selected box, or steps through the post when nothing is selected.
     private func arrowKey(_ key: KeyEquivalent, isShifted: Bool) -> KeyPress.Result {
         guard let photoID = editor.photoID, let post = store.post(postID) else { return .ignored }
 
-        if var box = selectedBox() {
+        if var box = editor.selectedBox(in: store, postID: postID) {
             let step = Self.nudgeStep * (isShifted ? 10 : 1)
             switch key {
             case .leftArrow: box.x -= step

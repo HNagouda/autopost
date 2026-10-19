@@ -106,7 +106,11 @@ private struct TextBoxInspector: View {
                 .font(.body)
                 .frame(minHeight: 54, maxHeight: 110)
                 .focused($isTextFocused)
-                .onChange(of: editor.textFocusRequest, initial: true) { isTextFocused = true }
+                .onChange(of: editor.wantsTextFocus, initial: true) {
+                    guard editor.wantsTextFocus else { return }
+                    isTextFocused = true
+                    editor.wantsTextFocus = false
+                }
 
             Picker("Font", selection: binding(\.fontFamily)) {
                 ForEach(Self.favoriteFamilies, id: \.self) { family in
