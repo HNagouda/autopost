@@ -23,6 +23,13 @@ struct SidebarView: View {
                 }
                 .onMove { store.movePosts(from: $0, to: $1) }
             }
+            if !store.library.deletedPosts.isEmpty {
+                Section("Recently Deleted") {
+                    ForEach(store.library.deletedPosts) { deleted in
+                        DeletedPostRow(deleted: deleted)
+                    }
+                }
+            }
         }
         .dropDestination(for: URL.self) { urls, _ in
             store.createPosts(from: urls)
@@ -62,12 +69,24 @@ struct SidebarView: View {
         return true
     }
 
+    private func exportAsButtons(_ post: Post, _ ratios: [AspectRatio]) -> some View {
+        ForEach(ratios) { ratio in
+            Button("\(ratio.label)  \(ratio.detail)") { exporter.export(post.id, in: store) { $0.ratio = ratio } }
+        }
+    }
+
     @ViewBuilder
     private func menu(for post: Post) -> some View {
         Button("Export Post") { exporter.export(post.id, in: store) }
         Menu("Export Post As") {
-            ForEach(AspectRatio.allCases.filter { $0 != .custom }) { ratio in
-                Button("\(ratio.label) — \(ratio.detail)") { exporter.export(post.id, in: store, ratio: ratio) }
+            exportAsButtons(post, AspectRatio.portrait + AspectRatio.squareAndOriginal)
+            Divider()
+            exportAsButtons(post, AspectRatio.landscape)
+            if !store.library.savedRatios.isEmpty {
+                Divider()
+                ForEach(store.library.savedRatios) { saved in
+                    Button("\(saved.label)  (saved)") { exporter.export(post.id, in: store) { $0.use(saved) } }
+                }
             }
         }
         Button("Export and AirDrop…") { exporter.export(post.id, in: store, sendsViaAirDrop: true) }
@@ -116,5 +135,30 @@ private struct PostRow: View {
         var parts = ["\(post.photos.count)", post.frame.ratioLabel]
         if post.lastExportedAt != nil { parts.append("exported") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Not tagged, so it cannot be selected and opened; it can only be restored or removed for good.
+private struct DeletedPostRow: View {
+    let deleted: DeletedPost
+
+    @Environment(LibraryStore.self) private var store
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(deleted.post.name).lineLimit(1)
+                Text(deleted.deletedAt, format: .relative(presentation: .named))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Restore") { store.restoreDeletedPost(deleted.id) }
+                .buttonStyle(.borderless)
+        }
+        .foregroundStyle(.secondary)
+        .contextMenu {
+            Button("Restore") { store.restoreDeletedPost(deleted.id) }
+            Button("Delete Permanently", role: .destructive) { store.deletePermanently(deleted.id) }
+        }
     }
 }

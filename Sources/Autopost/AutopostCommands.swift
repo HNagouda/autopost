@@ -4,6 +4,7 @@ import SwiftUI
 struct AutopostCommands: Commands {
     let store: LibraryStore
     let exporter: ExportController
+    let editor: EditorSession
 
     @Environment(\.openWindow) private var openWindow
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
@@ -16,6 +17,8 @@ struct AutopostCommands: Commands {
                 .keyboardShortcut("o")
             Button("Create Posts from Folders…") { store.createPosts(from: FileImport.choosePhotos(allowsFolders: true)) }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+            Divider()
+            Button("Restore from Backup…") { openWindow(id: WindowID.backups) }
         }
 
         CommandMenu("Post") {
@@ -26,6 +29,12 @@ struct AutopostCommands: Commands {
             Button("Show Exports in Finder") {
                 if let post = store.selectedPost { exporter.revealExports(of: post, settings: store.library.export) }
             }
+            Divider()
+            Button("Add Text Box") {
+                if let id = store.selectedPostID { editor.addTextBox(in: store, postID: id) }
+            }
+            .keyboardShortcut("t")
+            .disabled(!editor.isOpen)
             Divider()
             Button("Phone Preview") { openWindow(id: WindowID.phone) }
                 .keyboardShortcut("p", modifiers: [.command, .option])

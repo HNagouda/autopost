@@ -8,6 +8,9 @@ import Observation
 final class ThumbnailStore {
     // Sharp enough for a large tile and the phone preview on a Retina screen, small enough to keep many in memory.
     nonisolated private static let maxPixelSize = 1200
+    // The photo editor fills most of the screen; these are large, so only the last few are kept.
+    nonisolated private static let largeMaxPixelSize = 2800
+    private static let keptLargeImages = 6
 
     struct Thumbnail {
         var image: CGImage
@@ -17,11 +20,33 @@ final class ThumbnailStore {
     }
 
     private(set) var thumbnails: [URL: Thumbnail] = [:]
+    private(set) var largeImages: [URL: Thumbnail] = [:]
     private(set) var missing: Set<URL> = []
     private var loading: Set<URL> = []
+    private var largeOrder: [URL] = []
 
-    func thumbnail(for url: URL) -> Thumbnail? {
-        thumbnails[url]
+    func thumbnail(for url: URL, isLarge: Bool = false) -> Thumbnail? {
+        isLarge ? largeImages[url] ?? thumbnails[url] : thumbnails[url]
+    }
+
+    func loadLarge(_ url: URL) async {
+        await load(url)
+        guard largeImages[url] == nil else { return }
+
+        let result = await Task.detached(priority: .userInitiated) { () -> Thumbnail? in
+            guard let source = try? ImageSource(url: url),
+                  let image = source.image(maxPixelSize: Self.largeMaxPixelSize, isPreview: false)
+            else { return nil }
+            return Thumbnail(image: image, exifLine: source.exifLine)
+        }.value
+
+        guard let result else { return }
+        largeImages[url] = result
+        largeOrder.removeAll { $0 == url }
+        largeOrder.append(url)
+        while largeOrder.count > Self.keptLargeImages {
+            largeImages[largeOrder.removeFirst()] = nil
+        }
     }
 
     func load(_ url: URL) async {

@@ -9,6 +9,7 @@ struct PostGridView: View {
 
     @Environment(LibraryStore.self) private var store
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
+    @Environment(EditorSession.self) private var editor
     @State private var selection: Set<Photo.ID> = []
 
     var body: some View {
@@ -18,7 +19,7 @@ struct PostGridView: View {
         ScrollView {
             if photos.isEmpty {
                 ContentUnavailableView("Drop photos here", systemImage: "photo.on.rectangle.angled",
-                                       description: Text("Or press ⌘O. Drag tiles to reorder the carousel."))
+                                       description: Text("Or press ⌘O. Drag tiles to reorder the carousel, double-click one to edit it."))
                     .padding(.top, 120)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: tileWidth, maximum: tileWidth * 1.4), spacing: 28)], spacing: 28) {
@@ -53,6 +54,7 @@ struct PostGridView: View {
                 .truncationMode(.middle)
         }
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) { editor.open(photo.id) }
         .onTapGesture { select(photo.id) }
         .draggable(photo.url)
         .dropDestination(for: URL.self) { urls, _ in
@@ -86,6 +88,7 @@ struct PostGridView: View {
     @ViewBuilder
     private func menu(for photo: Photo) -> some View {
         let targets = selection.contains(photo.id) ? selection : [photo.id]
+        Button("Edit Photo") { editor.open(photo.id) }
         Button("Make First Photo") {
             let first = store.post(postID)?.photos.first?.id
             store.movePhoto(photo.id, from: postID, to: postID, before: first)

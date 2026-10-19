@@ -4,31 +4,46 @@ import SwiftUI
 /// A photo on its frame, laid out by the same FrameLayout the exporter uses, so the preview is the export.
 struct FramedPhotoView: View {
     let photo: Photo
-    let frame: FrameSettings
+    // The post's frame. The photo's own border and position are applied on top here, as the exporter does.
+    let postFrame: FrameSettings
+    var isLarge = false
 
     @Environment(ThumbnailStore.self) private var thumbnails
 
+    init(photo: Photo, frame: FrameSettings, isLarge: Bool = false) {
+        self.photo = photo
+        self.postFrame = frame
+        self.isLarge = isLarge
+    }
+
+    private var frame: FrameSettings {
+        postFrame.applying(photo.adjustments)
+    }
+
     var body: some View {
-        let thumbnail = thumbnails.thumbnail(for: photo.url)
-        let caption = frame.caption(exifLine: thumbnail?.exifLine)
-        let imageSize = Self.imageSize(thumbnail)
+        let thumbnail = thumbnails.thumbnail(for: photo.url, isLarge: isLarge)
 
         GeometryReader { geometry in
             let width = geometry.size.width
-            let layout = FrameLayout(imageSize: imageSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
+            let layout = Self.layout(photo: photo, frame: frame, thumbnail: thumbnail, width: width)
 
             ZStack(alignment: .topLeading) {
                 background(thumbnail, layout: layout)
                 photoLayer(thumbnail, layout: layout)
-                if let caption, let rect = layout.captionRect {
+                if let caption = frame.caption(exifLine: thumbnail?.exifLine), let rect = layout.captionRect {
                     captionLayer(caption, rect: rect, width: width)
+                }
+                if !photo.textBoxes.isEmpty {
+                    textLayer(size: layout.canvasSize)
                 }
             }
             .frame(width: width, height: layout.canvasSize.height)
             .clipped()
         }
         .aspectRatio(Self.canvasRatio(thumbnail, frame: frame), contentMode: .fit)
-        .task(id: photo.url) { await thumbnails.load(photo.url) }
+        .task(id: photo.url) {
+            if isLarge { await thumbnails.loadLarge(photo.url) } else { await thumbnails.load(photo.url) }
+        }
     }
 
     // Before the thumbnail loads, a 3:2 stand-in keeps the tile from jumping too much.
@@ -38,9 +53,28 @@ struct FramedPhotoView: View {
 
     /// Width over height of the framed canvas.
     static func canvasRatio(_ thumbnail: ThumbnailStore.Thumbnail?, frame: FrameSettings) -> Double {
-        let hasCaption = frame.caption(exifLine: thumbnail?.exifLine) != nil
-        let unit = FrameLayout(imageSize: imageSize(thumbnail), frame: frame, canvasWidth: 1, hasCaption: hasCaption)
+        let unit = layout(frame: frame, thumbnail: thumbnail, width: 1)
         return unit.canvasSize.width / unit.canvasSize.height
+    }
+
+    /// `frame` must already include the photo's own adjustments.
+    static func layout(photo: Photo? = nil, frame: FrameSettings, thumbnail: ThumbnailStore.Thumbnail?, width: Double) -> FrameLayout {
+        let hasCaption = frame.caption(exifLine: thumbnail?.exifLine) != nil
+        return FrameLayout(imageSize: imageSize(thumbnail), frame: frame, canvasWidth: width, hasCaption: hasCaption)
+    }
+
+    /// Drawn by the exporter's own Core Text code, so line breaks and spacing match the JPEG exactly.
+    private func textLayer(size: CGSize) -> some View {
+        Canvas { context, canvasSize in
+            context.withCGContext { cgContext in
+                // Canvas has a top-left origin; the renderer expects Core Graphics' bottom-left one.
+                cgContext.translateBy(x: 0, y: canvasSize.height)
+                cgContext.scaleBy(x: 1, y: -1)
+                TextBoxRenderer.draw(photo.textBoxes, in: cgContext, canvasSize: canvasSize)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
     }
 
     private var frameColor: Color {

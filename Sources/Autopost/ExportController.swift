@@ -13,10 +13,10 @@ final class ExportController {
         progress[id] != nil
     }
 
-    /// Exports with the post's own frame, after switching it to `ratio` when one is given.
-    func export(_ id: Post.ID, in store: LibraryStore, ratio: AspectRatio? = nil, sendsViaAirDrop: Bool = false) {
-        if let ratio {
-            store.update(id) { $0.frame.ratio = ratio }
+    /// Exports with the post's own frame, after `reframe` changes it (to switch the ratio, say) when given.
+    func export(_ id: Post.ID, in store: LibraryStore, sendsViaAirDrop: Bool = false, reframe: ((inout FrameSettings) -> Void)? = nil) {
+        if let reframe {
+            store.update(id) { reframe(&$0.frame) }
         }
         guard let post = store.post(id), !post.photos.isEmpty, !isExporting(id) else { return }
 

@@ -14,6 +14,10 @@ final class LibraryStore {
     }
     var selectedPostID: Post.ID?
 
+    // Deleted posts stay restorable this long.
+    private static let deletedRetention: TimeInterval = 30 * 24 * 60 * 60
+
+    let backups: LibraryBackups
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
 
@@ -21,8 +25,13 @@ final class LibraryStore {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Autopost", isDirectory: true)
         fileURL = folder.appendingPathComponent("library.json")
+        backups = LibraryBackups(folder: folder.appendingPathComponent("Backups", isDirectory: true))
         library = Self.load(from: fileURL)
         selectedPostID = library.posts.first?.id
+
+        backups.snapshot(fileURL)
+        let cutoff = Date().addingTimeInterval(-Self.deletedRetention)
+        library.deletedPosts.removeAll { $0.deletedAt < cutoff }
     }
 
     var selectedPost: Post? {
@@ -74,16 +83,40 @@ final class LibraryStore {
     func duplicatePost(_ id: Post.ID) {
         guard let original = post(id) else { return }
         var copy = Post(name: "\(original.name) copy", frame: original.frame)
-        copy.photos = original.photos.map { Photo(url: $0.url) }
+        copy.photos = original.photos.map { $0.duplicated() }
         library.posts.insert(copy, at: (library.posts.firstIndex { $0.id == id } ?? 0) + 1)
         selectedPostID = copy.id
     }
 
+    /// Moves the post to Recently Deleted. The library on disk is snapshotted first, in case that is not enough.
     func deletePost(_ id: Post.ID) {
+        guard let post = post(id) else { return }
+        backups.snapshot(fileURL, force: true)
+
         library.posts.removeAll { $0.id == id }
+        library.deletedPosts.insert(DeletedPost(post: post, deletedAt: Date()), at: 0)
         if selectedPostID == id {
             selectedPostID = library.posts.first?.id
         }
+    }
+
+    func restoreDeletedPost(_ id: Post.ID) {
+        guard let deleted = library.deletedPosts.first(where: { $0.id == id }) else { return }
+        library.deletedPosts.removeAll { $0.id == id }
+        library.posts.append(deleted.post)
+        selectedPostID = id
+    }
+
+    func deletePermanently(_ id: Post.ID) {
+        library.deletedPosts.removeAll { $0.id == id }
+    }
+
+    /// Replaces the whole library with a backup. The current one is snapshotted first, so this can be undone the same way.
+    func restoreBackup(_ backup: LibraryBackups.Backup) throws {
+        let restored = try JSONDecoder().decode(Library.self, from: Data(contentsOf: backup.url))
+        backups.snapshot(fileURL, force: true)
+        library = restored
+        selectedPostID = library.posts.first?.id
     }
 
     func movePosts(from source: IndexSet, to destination: Int) {
@@ -135,6 +168,19 @@ final class LibraryStore {
     }
 
     // * ====================================================================
+    // * === ratios
+    // * ====================================================================
+
+    func saveRatio(width: Double, height: Double) {
+        guard width > 0, height > 0, !library.savedRatios.contains(where: { $0.width == width && $0.height == height }) else { return }
+        library.savedRatios.append(SavedRatio(width: width, height: height))
+    }
+
+    func deleteSavedRatio(_ id: SavedRatio.ID) {
+        library.savedRatios.removeAll { $0.id == id }
+    }
+
+    // * ====================================================================
     // * === presets
     // * ====================================================================
 
@@ -165,6 +211,7 @@ final class LibraryStore {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(library).write(to: fileURL, options: .atomic)
+            backups.snapshot(fileURL)
         } catch {
             NSLog("Autopost: could not save library to %@: %@", fileURL.path, error.localizedDescription)
         }
