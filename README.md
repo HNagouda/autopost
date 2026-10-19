@@ -155,7 +155,7 @@ BUNDLE_ID=io.github.yourname.autopost ./scripts/build-app.sh
 
 With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, because the macOS 27 SDK turns `@State` into a macro whose plugin only ships with Xcode. With Xcode installed, its own SDK is used.
 
-CI runs the tests and builds the app on every push to `master` and on every pull request. Pushing a tag like `v1.1` builds the app and attaches `Autopost-v1.1.zip` to a GitHub release.
+CI runs the tests and builds the app on every push to `main` and on every pull request. Pushing a tag like `v1.1` builds the app and attaches `Autopost-v1.1.zip` to a GitHub release.
 
 ## License
 
