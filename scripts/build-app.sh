@@ -4,7 +4,8 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Autopost.app"
-VERSION="${VERSION:-1.0}"
+# CI passes the full release version; local builds use the major.minor from the VERSION file.
+VERSION="${VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 # Forks should set their own, e.g. BUNDLE_ID=io.github.yourname.autopost, so their Keychain items and settings are separate.
 BUNDLE_ID="${BUNDLE_ID:-io.github.hnagouda.autopost}"
 
