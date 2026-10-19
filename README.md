@@ -52,7 +52,11 @@ You group photos into posts, the way you'd plan a carousel. Each post has one fr
 
 ## Try it
 
-**Download.** Grab `Autopost-<version>.zip` from the [latest release](https://github.com/HNagouda/autopost/releases/latest), unzip it and drag Autopost into Applications. Want the newest work before it ships? The [dev build](https://github.com/HNagouda/autopost/releases/tag/dev) follows the `dev` branch. The app is signed ad hoc rather than with a paid Apple developer certificate, so the first time you open it, right-click it and choose Open.
+**Download.** Grab `Autopost-<version>.zip` from the [latest release](https://github.com/HNagouda/autopost/releases/latest), unzip it and drag Autopost into Applications. Want the newest work before it ships? The [dev build](https://github.com/HNagouda/autopost/releases/tag/dev-build) follows the `dev` branch. The app is not notarized by Apple yet, so macOS blocks it the first time. Open System Settings → Privacy & Security, scroll down and click Open Anyway. Or clear the download flag in Terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Autopost.app
+```
 
 **Or build it.** You only need the Xcode Command Line Tools (`xcode-select --install`), not Xcode itself.
 
@@ -167,7 +171,7 @@ feature/text-shadows ──PR──▶ dev ──PR──▶ main
 ```
 
 - Every pull request runs the tests and builds the app.
-- Every push to `dev` replaces the [dev prerelease](https://github.com/HNagouda/autopost/releases/tag/dev) with a fresh `Autopost-dev.zip`, so there is always a build of the latest work to try.
+- Every push to `dev` replaces the [dev prerelease](https://github.com/HNagouda/autopost/releases/tag/dev-build) with a fresh `Autopost-dev.zip`, so there is always a build of the latest work to try.
 - Every merge into `main` publishes the next release, with notes generated from the merged pull requests.
 
 The `VERSION` file holds the major and minor version, like `1.0`. Each release on `main` takes the next patch number, so releases go `v1.0.0`, `v1.0.1`, and so on. To start `1.1.0` or `2.0.0`, change `VERSION` in the pull request that should carry it. `scripts/next-version.sh` prints the version the next release will get.
