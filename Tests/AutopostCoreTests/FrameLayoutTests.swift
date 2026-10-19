@@ -65,3 +65,34 @@ func shutterSpeedReadsLikeACamera(seconds: Double, label: String) {
 @Test func slugDropsPunctuation() {
     #expect(PostExporter.slug("Cali on film #2") == "cali-on-film-2")
 }
+
+@Test func photoNarrowerThanCanvasCanBePushedRight() {
+    var frame = FrameSettings()
+    frame.ratio = .landscape16x9
+    frame.horizontalOffset = 1
+    let layout = FrameLayout(imageSize: CGSize(width: 2000, height: 3000), frame: frame, canvasWidth: 1600)
+
+    #expect(abs(layout.imageRect.maxX - 1520) < 0.001)
+}
+
+@Test func photoAdjustmentsOverrideOnlyWhatTheySet() {
+    var frame = FrameSettings()
+    frame.borderPercent = 5
+    frame.verticalOffset = 0.5
+    var adjustments = PhotoAdjustments()
+    adjustments.borderPercent = 12
+
+    let applied = frame.applying(adjustments)
+
+    #expect(applied.borderPercent == 12)
+    #expect(applied.verticalOffset == 0.5)
+}
+
+@Test func savedRatioIsUsedAsCustomRatio() {
+    var frame = FrameSettings()
+    let ultrawide = SavedRatio(width: 32, height: 9)
+    frame.use(ultrawide)
+
+    #expect(frame.uses(ultrawide))
+    #expect(abs(frame.ratioValue! - 32.0 / 9.0) < 0.0001)
+}

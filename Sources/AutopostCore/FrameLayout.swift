@@ -33,14 +33,18 @@ public struct FrameLayout: Equatable, Sendable {
         let scale = min(innerWidth / imageSize.width, innerHeight / imageSize.height)
         let photoSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
 
+        let freeWidth = innerWidth - photoSize.width
         let freeHeight = innerHeight - photoSize.height
-        let offset = min(max(frame.verticalOffset, -1), 1)
-        let x = (canvasWidth - photoSize.width) / 2
-        let y = border + freeHeight / 2 * (1 + offset)
+        let x = border + freeWidth / 2 * (1 + Self.clamped(frame.horizontalOffset))
+        let y = border + freeHeight / 2 * (1 + Self.clamped(frame.verticalOffset))
 
         canvasSize = CGSize(width: canvasWidth, height: canvasHeight)
         imageRect = CGRect(origin: CGPoint(x: x, y: y), size: photoSize)
         captionRect = hasCaption ? Self.captionRect(below: imageRect, height: captionBand) : nil
+    }
+
+    private static func clamped(_ offset: Double) -> Double {
+        min(max(offset, -1), 1)
     }
 
     private static func captionRect(below image: CGRect, height: Double) -> CGRect {

@@ -16,7 +16,9 @@ public enum FrameRenderer {
     private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     private static let ciContext = CIContext(options: [.workingColorSpace: colorSpace, .outputColorSpace: colorSpace])
 
-    public static func render(image: CGImage, layout: FrameLayout, frame: FrameSettings, caption: String?, isSharpening: Bool) -> CGImage? {
+    public static func render(
+        image: CGImage, layout: FrameLayout, frame: FrameSettings, caption: String?, textBoxes: [TextBox], isSharpening: Bool
+    ) -> CGImage? {
         let width = Int(layout.canvasSize.width.rounded())
         let height = Int(layout.canvasSize.height.rounded())
         guard let context = CGContext(
@@ -43,6 +45,7 @@ public enum FrameRenderer {
         if let caption, let captionRect = layout.captionRect {
             drawCaption(caption, in: context, rect: flipped(captionRect, canvasHeight: canvas.height), frame: frame, canvasWidth: canvas.width)
         }
+        TextBoxRenderer.draw(textBoxes, in: context, canvasSize: canvas.size)
 
         return context.makeImage()
     }

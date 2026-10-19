@@ -1,53 +1,5 @@
 import Foundation
 
-public enum AspectRatio: String, Codable, CaseIterable, Identifiable, Sendable {
-    case portrait4x5
-    case portrait3x4
-    case square
-    case landscape191x1
-    case story9x16
-    case original
-    case custom
-
-    public var id: String { rawValue }
-
-    public var label: String {
-        switch self {
-        case .portrait4x5: "4:5"
-        case .portrait3x4: "3:4"
-        case .square: "1:1"
-        case .landscape191x1: "1.91:1"
-        case .story9x16: "9:16"
-        case .original: "Original"
-        case .custom: "Custom"
-        }
-    }
-
-    public var detail: String {
-        switch self {
-        case .portrait4x5: "Portrait feed"
-        case .portrait3x4: "Tall feed, matches the profile grid"
-        case .square: "Square"
-        case .landscape191x1: "Landscape feed"
-        case .story9x16: "Story or reel"
-        case .original: "Even border, keeps the photo's shape"
-        case .custom: "Your own ratio"
-        }
-    }
-
-    /// Width divided by height, or nil when the photo or the custom fields decide.
-    public var fixedValue: Double? {
-        switch self {
-        case .portrait4x5: 4.0 / 5.0
-        case .portrait3x4: 3.0 / 4.0
-        case .square: 1
-        case .landscape191x1: 1.91
-        case .story9x16: 9.0 / 16.0
-        case .original, .custom: nil
-        }
-    }
-}
-
 public enum FrameBackground: String, Codable, CaseIterable, Sendable {
     case color
     case blur
@@ -76,6 +28,17 @@ public struct FrameColor: Codable, Equatable, Sendable {
     public var isLight: Bool { 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.5 }
 }
 
+/// Per-photo changes to the post's frame. Nil means "same as the post".
+public struct PhotoAdjustments: Codable, Equatable, Sendable {
+    public var borderPercent: Double?
+    public var verticalOffset: Double?
+    public var horizontalOffset: Double?
+
+    public init() {}
+
+    public var isEmpty: Bool { borderPercent == nil && verticalOffset == nil && horizontalOffset == nil }
+}
+
 public struct FrameSettings: Codable, Equatable, Sendable {
     public var ratio: AspectRatio = .portrait4x5
     public var customRatioWidth: Double = 4
@@ -84,6 +47,8 @@ public struct FrameSettings: Codable, Equatable, Sendable {
     public var borderPercent: Double = 5
     // -1 pushes the photo to the top of the free space, 1 to the bottom.
     public var verticalOffset: Double = 0
+    // -1 pushes the photo to the left of the free space, 1 to the right.
+    public var horizontalOffset: Double = 0
     public var background: FrameBackground = .color
     public var color: FrameColor = .white
     public var hasShadow = false
@@ -91,6 +56,41 @@ public struct FrameSettings: Codable, Equatable, Sendable {
     public var captionText = ""
 
     public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = FrameSettings()
+        ratio = try container.decode(.ratio, default: defaults.ratio)
+        customRatioWidth = try container.decode(.customRatioWidth, default: defaults.customRatioWidth)
+        customRatioHeight = try container.decode(.customRatioHeight, default: defaults.customRatioHeight)
+        borderPercent = try container.decode(.borderPercent, default: defaults.borderPercent)
+        verticalOffset = try container.decode(.verticalOffset, default: defaults.verticalOffset)
+        horizontalOffset = try container.decode(.horizontalOffset, default: defaults.horizontalOffset)
+        background = try container.decode(.background, default: defaults.background)
+        color = try container.decode(.color, default: defaults.color)
+        hasShadow = try container.decode(.hasShadow, default: defaults.hasShadow)
+        captionMode = try container.decode(.captionMode, default: defaults.captionMode)
+        captionText = try container.decode(.captionText, default: defaults.captionText)
+    }
+
+    public func uses(_ saved: SavedRatio) -> Bool {
+        ratio == .custom && customRatioWidth == saved.width && customRatioHeight == saved.height
+    }
+
+    public mutating func use(_ saved: SavedRatio) {
+        ratio = .custom
+        customRatioWidth = saved.width
+        customRatioHeight = saved.height
+    }
+
+    /// This frame with one photo's own border and position on top.
+    public func applying(_ adjustments: PhotoAdjustments) -> FrameSettings {
+        var frame = self
+        frame.borderPercent = adjustments.borderPercent ?? borderPercent
+        frame.verticalOffset = adjustments.verticalOffset ?? verticalOffset
+        frame.horizontalOffset = adjustments.horizontalOffset ?? horizontalOffset
+        return frame
+    }
 
     /// Canvas width divided by height, or nil when the canvas follows the photo.
     public var ratioValue: Double? {

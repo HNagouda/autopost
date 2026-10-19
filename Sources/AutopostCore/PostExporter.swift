@@ -35,21 +35,21 @@ public enum PostExporter {
         try removePreviousExports(in: folder, stem: stem)
 
         let jobs = post.photos.enumerated().map { index, photo in
-            (photo.url, folder.appendingPathComponent(String(format: "%@-%02d.jpg", stem, index + 1)))
+            (photo, folder.appendingPathComponent(String(format: "%@-%02d.jpg", stem, index + 1)))
         }
         var finished = 0
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             var pending = jobs[...]
             for _ in 0..<min(parallelPhotos, pending.count) {
-                let (source, target) = pending.removeFirst()
-                group.addTask { try exportPhoto(source, to: target, frame: post.frame, settings: settings) }
+                let (photo, target) = pending.removeFirst()
+                group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings) }
             }
             for try await _ in group {
                 finished += 1
                 progress(finished)
-                if let (source, target) = pending.popFirst() {
-                    group.addTask { try exportPhoto(source, to: target, frame: post.frame, settings: settings) }
+                if let (photo, target) = pending.popFirst() {
+                    group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings) }
                 }
             }
         }
@@ -57,7 +57,8 @@ public enum PostExporter {
         return jobs.map(\.1)
     }
 
-    public static func exportPhoto(_ url: URL, to target: URL, frame: FrameSettings, settings: ExportSettings) throws {
+    public static func exportPhoto(_ photo: Photo, to target: URL, frame: FrameSettings, settings: ExportSettings) throws {
+        let url = photo.url
         let source = try ImageSource(url: url)
         let caption = frame.caption(exifLine: source.exifLine)
         let width = canvasWidth(for: source.pixelSize, frame: frame, size: settings.size, hasCaption: caption != nil)
@@ -69,7 +70,7 @@ public enum PostExporter {
         // RAW files can report a slightly different size than they decode to; lay out on the real pixels.
         let decodedSize = CGSize(width: image.width, height: image.height)
         let layout = FrameLayout(imageSize: decodedSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
-        guard let framed = FrameRenderer.render(image: image, layout: layout, frame: frame, caption: caption, isSharpening: settings.isSharpening)
+        guard let framed = FrameRenderer.render(image: image, layout: layout, frame: frame, caption: caption, textBoxes: photo.textBoxes, isSharpening: settings.isSharpening)
         else { throw ExportError.renderFailed(url) }
 
         let metadata = settings.keepsMetadata ? source.exportMetadata(stripsLocation: settings.stripsLocation) : [:]
