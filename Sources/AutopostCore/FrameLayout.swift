@@ -4,9 +4,8 @@ import CoreGraphics
 ///
 /// The preview and the exporter both use this, so what the grid shows is exactly what gets written.
 public struct FrameLayout: Equatable, Sendable {
-    // Space kept under the photo for the caption, as a fraction of the canvas width.
-    public static let captionBandFraction = 0.05
-    public static let captionFontFraction = 0.0165
+    // The band kept under the photo for the caption is this many times the caption's font size.
+    public static let captionBandPerFontSize = 3.0
     // A wider border leaves too little room for the photo to be worth showing.
     public static let maxBorderPercent = 30.0
 
@@ -16,7 +15,7 @@ public struct FrameLayout: Equatable, Sendable {
 
     public init(imageSize: CGSize, frame: FrameSettings, canvasWidth: Double, hasCaption: Bool = false) {
         let border = min(max(frame.borderPercent, 0), Self.maxBorderPercent) / 100 * canvasWidth
-        let captionBand = hasCaption ? Self.captionBandFraction * canvasWidth : 0
+        let captionBand = hasCaption ? frame.captionSize * Self.captionBandPerFontSize * canvasWidth : 0
         let innerWidth = canvasWidth - 2 * border
         let photoRatio = imageSize.width / max(imageSize.height, 1)
 

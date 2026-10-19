@@ -54,6 +54,15 @@ public struct FrameSettings: Codable, Equatable, Sendable {
     public var hasShadow = false
     public var captionMode: CaptionMode = .off
     public var captionText = ""
+    public var captionFontFamily = TextBox.systemFontFamily
+    // Caption font size as a fraction of the canvas width.
+    public var captionSize = 0.0165
+    public var captionIsBold = false
+    public var captionIsItalic = false
+    // Letter spacing as a fraction of the font size.
+    public var captionTracking = 0.04
+    // Nil picks dark or light text to suit the frame.
+    public var captionColor: FrameColor?
 
     public init() {}
 
@@ -71,6 +80,12 @@ public struct FrameSettings: Codable, Equatable, Sendable {
         hasShadow = try container.decode(.hasShadow, default: defaults.hasShadow)
         captionMode = try container.decode(.captionMode, default: defaults.captionMode)
         captionText = try container.decode(.captionText, default: defaults.captionText)
+        captionFontFamily = try container.decode(.captionFontFamily, default: defaults.captionFontFamily)
+        captionSize = try container.decode(.captionSize, default: defaults.captionSize)
+        captionIsBold = try container.decode(.captionIsBold, default: defaults.captionIsBold)
+        captionIsItalic = try container.decode(.captionIsItalic, default: defaults.captionIsItalic)
+        captionTracking = try container.decode(.captionTracking, default: defaults.captionTracking)
+        captionColor = try container.decodeIfPresent(FrameColor.self, forKey: .captionColor)
     }
 
     public func uses(_ saved: SavedRatio) -> Bool {
@@ -117,5 +132,29 @@ public struct FrameSettings: Codable, Equatable, Sendable {
             let text = captionText.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? nil : text
         }
+    }
+
+    /// The caption as a text box centred in the band under the photo, so it draws exactly like any other text.
+    public func captionBox(_ text: String, in layout: FrameLayout) -> TextBox? {
+        guard let rect = layout.captionRect else { return nil }
+
+        var box = TextBox()
+        box.text = text
+        box.fontFamily = captionFontFamily
+        box.size = captionSize
+        box.isBold = captionIsBold
+        box.isItalic = captionIsItalic
+        box.tracking = captionTracking
+        box.color = captionColor ?? automaticCaptionColor
+        box.alignment = .center
+        box.x = rect.midX / layout.canvasSize.width
+        box.y = rect.midY / layout.canvasSize.height
+        return box
+    }
+
+    /// Dark grey on a light frame, near-white on a dark frame or a blurred photo.
+    public var automaticCaptionColor: FrameColor {
+        let isDarkText = background == .color && color.isLight
+        return isDarkText ? FrameColor(red: 0.32, green: 0.32, blue: 0.32) : FrameColor(red: 0.92, green: 0.92, blue: 0.92)
     }
 }

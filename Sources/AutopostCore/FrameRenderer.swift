@@ -1,6 +1,5 @@
 import CoreGraphics
 import CoreImage
-import CoreText
 import Foundation
 
 /// Draws a photo onto its framed canvas in sRGB, which is what Instagram expects.
@@ -42,10 +41,8 @@ public enum FrameRenderer {
         context.draw(photo, in: flipped(layout.imageRect, canvasHeight: canvas.height))
         context.restoreGState()
 
-        if let caption, let captionRect = layout.captionRect {
-            drawCaption(caption, in: context, rect: flipped(captionRect, canvasHeight: canvas.height), frame: frame, canvasWidth: canvas.width)
-        }
-        TextBoxRenderer.draw(textBoxes, in: context, canvasSize: canvas.size)
+        let captionBoxes = caption.flatMap { frame.captionBox($0, in: layout) }.map { [$0] } ?? []
+        TextBoxRenderer.draw(captionBoxes + textBoxes, in: context, canvasSize: canvas.size)
 
         return context.makeImage()
     }
@@ -83,24 +80,5 @@ public enum FrameRenderer {
         let source = CIImage(cgImage: image)
         let output = source.applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: sharpness])
         return ciContext.createCGImage(output, from: source.extent)
-    }
-
-    private static func drawCaption(_ text: String, in context: CGContext, rect: CGRect, frame: FrameSettings, canvasWidth: Double) {
-        let font = CTFontCreateUIFontForLanguage(.system, FrameLayout.captionFontFraction * canvasWidth, nil)!
-        let isDarkText = frame.background == .color && frame.color.isLight
-        let color = isDarkText ? CGColor(gray: 0.32, alpha: 1) : CGColor(gray: 0.92, alpha: 1)
-        let attributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key(kCTFontAttributeName as String): font,
-            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
-            NSAttributedString.Key(kCTKernAttributeName as String): 0.04 * CTFontGetSize(font),
-        ]
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
-        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
-
-        // Centered across the photo and vertically in the band under it.
-        let x = rect.midX - bounds.width / 2 - bounds.minX
-        let y = rect.midY - bounds.height / 2 - bounds.minY
-        context.textPosition = CGPoint(x: x, y: y)
-        CTLineDraw(line, context)
     }
 }

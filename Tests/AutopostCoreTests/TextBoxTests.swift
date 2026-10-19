@@ -61,3 +61,27 @@ import Testing
 
     #expect(result.point == CGPoint(x: 0.46, y: 0.205))
 }
+
+@Test func captionBoxSitsInTheMiddleOfTheBandUnderThePhoto() {
+    var frame = FrameSettings()
+    frame.captionMode = .custom
+    frame.captionFontFamily = "Futura"
+    frame.captionIsItalic = true
+    let layout = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1080, hasCaption: true)
+
+    let box = frame.captionBox("Kodak Gold 200", in: layout)!
+
+    #expect(abs(box.y * 1350 - layout.captionRect!.midY) < 0.001)
+    #expect(box.fontFamily == "Futura")
+    #expect(box.isItalic)
+    #expect(box.color == frame.automaticCaptionColor)
+}
+
+@Test func biggerCaptionGetsATallerBand() {
+    var frame = FrameSettings()
+    let small = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1000, hasCaption: true)
+    frame.captionSize *= 2
+    let large = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1000, hasCaption: true)
+
+    #expect(abs(large.captionRect!.height - 2 * small.captionRect!.height) < 0.001)
+}
