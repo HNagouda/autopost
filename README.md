@@ -51,7 +51,7 @@ Only the Command Line Tools are needed.
 ```sh
 ./scripts/build-app.sh         # writes build/Autopost.app
 open build/Autopost.app
-SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift test
+./scripts/test.sh
 ```
 
 The build pins the macOS 26.5 SDK because the macOS 27 SDK turns `@State` into a macro whose plugin only ships with Xcode.
