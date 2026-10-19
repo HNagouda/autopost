@@ -48,7 +48,7 @@ import Testing
     let layout = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1000)
     let bottomBorderMiddle = (layout.imageRect.maxY + 1000) / 2 / 1000
 
-    let result = TextSnapping.snap(CGPoint(x: 0.43, y: bottomBorderMiddle + 0.01), layout: layout)
+    let result = TextSnapping.snap(CGPoint(x: 0.46, y: bottomBorderMiddle - 0.005), layout: layout)
 
     #expect(abs(result.point.y - bottomBorderMiddle) < 0.0001)
     #expect(result.xGuide == nil)
