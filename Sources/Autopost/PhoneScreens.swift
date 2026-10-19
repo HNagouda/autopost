@@ -1,9 +1,6 @@
 import AutopostCore
 import SwiftUI
 
-// The app keeps feed posts between 4:5 and 1.91:1 and crops anything outside that range.
-private let tallestFeedRatio = 4.0 / 5.0
-private let widestFeedRatio = 1.91
 // Profile grid tiles have been 3:4 since 2025, so a 4:5 post loses a little off each side there.
 private let gridTileRatio = 3.0 / 4.0
 
@@ -49,8 +46,8 @@ private struct FeedPost: View {
     var body: some View {
         let width = PhonePreviewView.screenSize.width
         // Every slide is cropped to the first one's shape.
-        let firstRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: post.photos[0].url), frame: post.frame)
-        let ratio = min(max(firstRatio, tallestFeedRatio), widestFeedRatio)
+        let firstRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: post.photos[0].url), frame: post.frame(for: post.photos[0]))
+        let ratio = min(max(firstRatio, InstagramFeed.tallestRatio), InstagramFeed.widestRatio)
 
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -259,7 +256,7 @@ struct FilledFramedPhoto: View {
     @Environment(ThumbnailStore.self) private var thumbnails
 
     var body: some View {
-        let photoRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: photo.url), frame: frame)
+        let photoRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: photo.url), frame: frame.applying(photo.adjustments))
         let height = width / ratio
         let size = photoRatio > ratio
             ? CGSize(width: height * photoRatio, height: height)
