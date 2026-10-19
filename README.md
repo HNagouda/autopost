@@ -9,6 +9,7 @@
 Drop in your edits, pick a ratio, and get a whole carousel of padded, sRGB, 1080 px JPEGs in one click.
 
 [![CI](https://github.com/HNagouda/autopost/actions/workflows/ci.yml/badge.svg)](https://github.com/HNagouda/autopost/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/HNagouda/autopost)](https://github.com/HNagouda/autopost/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
@@ -51,7 +52,7 @@ You group photos into posts, the way you'd plan a carousel. Each post has one fr
 
 ## Try it
 
-**Download.** Grab `Autopost-<version>.zip` from [Releases](https://github.com/HNagouda/autopost/releases), unzip it and drag Autopost into Applications. The app is signed ad hoc rather than with a paid Apple developer certificate, so the first time you open it, right-click it and choose Open.
+**Download.** Grab `Autopost-<version>.zip` from the [latest release](https://github.com/HNagouda/autopost/releases/latest), unzip it and drag Autopost into Applications. Want the newest work before it ships? The [dev build](https://github.com/HNagouda/autopost/releases/tag/dev) follows the `dev` branch. The app is signed ad hoc rather than with a paid Apple developer certificate, so the first time you open it, right-click it and choose Open.
 
 **Or build it.** You only need the Xcode Command Line Tools (`xcode-select --install`), not Xcode itself.
 
@@ -130,6 +131,7 @@ Sources/Autopost/              the SwiftUI app
 Tests/AutopostCoreTests/       layout, text, snapping, library loading and Instagram response tests
 scripts/build-app.sh           builds build/Autopost.app
 scripts/test.sh                runs the tests
+scripts/next-version.sh        prints the version the next release on main will get
 scripts/make-icon.sh           regenerates Resources/AppIcon.icns
 ```
 
@@ -155,7 +157,20 @@ BUNDLE_ID=io.github.yourname.autopost ./scripts/build-app.sh
 
 With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, because the macOS 27 SDK turns `@State` into a macro whose plugin only ships with Xcode. With Xcode installed, its own SDK is used.
 
-CI runs the tests and builds the app on every push to `main` and on every pull request. Pushing a tag like `v1.1` builds the app and attaches `Autopost-v1.1.zip` to a GitHub release.
+## Branches and releases
+
+Work happens on feature branches, which merge into `dev` through pull requests. `dev` merges into `main` when it is ready to ship, and `main` only takes pull requests from `dev`.
+
+```
+feature/text-shadows ──PR──▶ dev ──PR──▶ main
+       CI tests            dev build     release v1.0.N
+```
+
+- Every pull request runs the tests and builds the app.
+- Every push to `dev` replaces the [dev prerelease](https://github.com/HNagouda/autopost/releases/tag/dev) with a fresh `Autopost-dev.zip`, so there is always a build of the latest work to try.
+- Every merge into `main` publishes the next release, with notes generated from the merged pull requests.
+
+The `VERSION` file holds the major and minor version, like `1.0`. Each release on `main` takes the next patch number, so releases go `v1.0.0`, `v1.0.1`, and so on. To start `1.1.0` or `2.0.0`, change `VERSION` in the pull request that should carry it. `scripts/next-version.sh` prints the version the next release will get.
 
 ## License
 
