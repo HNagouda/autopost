@@ -14,7 +14,7 @@ Drop in your edits, pick a ratio, and get a whole carousel of padded, sRGB, 1080
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 
-<img src="docs/screenshots/main-light.png" alt="Autopost showing a post of framed photos with the frame inspector" width="900">
+<img src="docs/demo.gif" alt="Autopost switching a carousel between ratios, adding a border colour, placing text in the editor, and previewing the post on a phone" width="900">
 
 </div>
 
@@ -47,6 +47,8 @@ You group photos into posts, the way you'd plan a carousel. Each post has one fr
     <td align="center">Profile grid, dark</td>
   </tr>
 </table>
+
+<p align="center"><img src="docs/screenshots/main-light.png" alt="A post of framed photos with the frame inspector" width="900"></p>
 
 <p align="center"><img src="docs/screenshots/main-amoled.png" alt="Autopost in AMOLED black" width="900"><br>AMOLED black, for checking white frames the way an OLED phone shows them</p>
 
