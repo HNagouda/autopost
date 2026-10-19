@@ -8,6 +8,7 @@ struct AutopostApp: App {
     @State private var thumbnails = ThumbnailStore()
     @State private var exporter = ExportController()
     @State private var editor = EditorSession()
+    @State private var instagram = InstagramAccount()
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
 
     var body: some Scene {
@@ -27,6 +28,7 @@ struct AutopostApp: App {
             PhonePreviewView()
                 .environment(store)
                 .environment(thumbnails)
+                .environment(instagram)
         }
         .defaultSize(width: 460, height: 900)
         .windowResizability(.contentMinSize)
@@ -39,6 +41,7 @@ struct AutopostApp: App {
 
         Settings {
             SettingsView()
+                .environment(instagram)
         }
     }
 }

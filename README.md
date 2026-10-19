@@ -19,6 +19,7 @@ Sources/AutopostCore/          everything that can run without a window
   FrameRenderer.swift          draws the framed image in sRGB with Core Graphics
   PostExporter.swift           numbered JPEGs per post, a few photos in parallel
   Library.swift                posts, photos, presets, export settings
+  InstagramAPI.swift           profile, recent posts and token refresh from graph.instagram.com
 Sources/Autopost/              the SwiftUI app
   LibraryStore.swift           the library, saved to ~/Library/Application Support/Autopost/library.json
   ThumbnailStore.swift         preview images, decoded once off the main thread
@@ -26,7 +27,9 @@ Sources/Autopost/              the SwiftUI app
   PostGridView.swift           the photos of a post, framed, drag to reorder
   InspectorView.swift          frame settings for the selected post
   PhonePreviewView.swift       phone mockup window, feed and profile grid, light and dark
-Tests/AutopostCoreTests/       layout and formatting tests
+  InstagramAccount.swift       the optional Instagram connection, token kept in the Keychain
+  InstagramSettingsView.swift  Settings tab where the token is pasted
+Tests/AutopostCoreTests/       layout, formatting and Instagram response tests
 scripts/build-app.sh           builds build/Autopost.app
 scripts/make-icon.sh           regenerates Resources/AppIcon.icns
 ```
@@ -43,6 +46,20 @@ Exports go to `~/Pictures/Autopost Exports/<post name>/` as `<post-name>-01.jpg`
 #! NOTE[raw] : RAW files are decoded with Apple's default processing, not your Lightroom edits
 
 Export an edited JPEG or TIFF from Lightroom first and import that.
+
+## Connecting Instagram
+
+The phone preview can show your real profile, so you see planned posts sitting on top of what is already on your grid. This is optional; without it the preview uses the handle you type and placeholder counts.
+
+It uses Instagram's [API with Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login), which only works for Business and Creator accounts. The older Basic Display API for personal accounts was shut down in December 2024.
+
+1. Switch your Instagram account to a Business or Creator account in the Instagram app, if it is not one already.
+2. Create an app at [developers.facebook.com](https://developers.facebook.com/apps) and add the Instagram product.
+3. Under App roles, add your account as an Instagram tester, then accept the invite in Instagram.
+4. In the app dashboard, open Instagram > API setup with Instagram business login and click Generate token next to your account.
+5. Paste the token in Autopost under Settings (⌘,) > Instagram and click Connect.
+
+The token is kept in your login Keychain under `nl.harsh.autopost.instagram`, never in `library.json`. Dashboard tokens last 60 days. Autopost asks Instagram for a fresh one every time it loads your profile, so the token keeps working as long as you open the app now and then. Instagram only refreshes tokens that are at least a day old, so the first refresh after you paste a new token fails quietly and the token you pasted stays in use.
 
 ## Building
 

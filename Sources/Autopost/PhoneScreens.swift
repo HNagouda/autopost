@@ -157,13 +157,16 @@ private struct FeedPost: View {
 }
 
 /// The profile grid, newest post first, so the last post in the sidebar lands top left.
+/// With Instagram connected, the planned posts sit on top of the account's real ones, as they will after posting.
 struct ProfileScreen: View {
     let handle: String
 
     @Environment(LibraryStore.self) private var store
+    @Environment(InstagramAccount.self) private var instagram
 
     var body: some View {
         let posts = store.library.posts.reversed().filter { !$0.photos.isEmpty }
+        let profile = instagram.profile
 
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -175,11 +178,18 @@ struct ProfileScreen: View {
                 }
                 HStack(spacing: 28) {
                     Avatar(size: 86)
-                    stat("\(posts.count)", "posts")
-                    stat("1,204", "followers")
-                    stat("388", "following")
+                    stat("\(posts.count + (profile?.mediaCount ?? 0))", "posts")
+                    stat(profile?.followersCount.formatted() ?? "1,204", "followers")
+                    stat(profile?.followsCount.formatted() ?? "388", "following")
                 }
-                Text("Photos on film and digital").font(.system(size: 13))
+                if let profile {
+                    // The API does not hand out the bio, so a connected profile shows only the name.
+                    if let name = profile.name, !name.isEmpty {
+                        Text(name).font(.system(size: 13, weight: .semibold))
+                    }
+                } else {
+                    Text("Photos on film and digital").font(.system(size: 13))
+                }
                 HStack(spacing: 6) {
                     profileButton("Edit profile")
                     profileButton("Share profile")
@@ -209,11 +219,7 @@ struct ProfileScreen: View {
                 FilledFramedPhoto(photo: post.photos[0], frame: post.frame, width: tileWidth, ratio: gridTileRatio)
                     .overlay(alignment: .topTrailing) {
                         if post.photos.count > 1 {
-                            Image(systemName: "square.on.square.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.white)
-                                .shadow(radius: 2)
-                                .padding(6)
+                            TileBadge(symbol: carouselSymbol)
                         }
                     }
                     .overlay {
@@ -221,6 +227,9 @@ struct ProfileScreen: View {
                             Rectangle().strokeBorder(Color.accentColor, lineWidth: 2)
                         }
                     }
+            }
+            ForEach(instagram.media) { media in
+                PublishedTile(media: media, width: tileWidth)
             }
         }
     }
@@ -263,13 +272,65 @@ struct FilledFramedPhoto: View {
     }
 }
 
+private let carouselSymbol = "square.on.square.fill"
+private let videoSymbol = "play.fill"
+
+/// A post already on Instagram, cropped to the grid tile like the planned ones.
+private struct PublishedTile: View {
+    let media: InstagramMedia
+    let width: Double
+
+    var body: some View {
+        AsyncImage(url: media.tileImageURL) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            Rectangle().fill(.quaternary)
+        }
+        .frame(width: width, height: width / gridTileRatio)
+        .clipped()
+        .overlay(alignment: .topTrailing) {
+            if media.isCarousel {
+                TileBadge(symbol: carouselSymbol)
+            } else if media.isVideo {
+                TileBadge(symbol: videoSymbol)
+            }
+        }
+    }
+}
+
+private struct TileBadge: View {
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13))
+            .foregroundStyle(.white)
+            .shadow(radius: 2)
+            .padding(6)
+    }
+}
+
+/// The connected account's profile picture, or a placeholder person, inside the story ring.
 private struct Avatar: View {
     let size: Double
+
+    @Environment(InstagramAccount.self) private var instagram
 
     var body: some View {
         Circle()
             .fill(.quaternary)
-            .overlay { Image(systemName: "person.fill").font(.system(size: size * 0.45)).foregroundStyle(.secondary) }
+            .overlay {
+                if let url = instagram.profile?.profilePictureURL {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        placeholder
+                    }
+                    .clipShape(Circle())
+                } else {
+                    placeholder
+                }
+            }
             .padding(size * 0.06)
             .overlay {
                 Circle().strokeBorder(
@@ -278,5 +339,9 @@ private struct Avatar: View {
                 )
             }
             .frame(width: size, height: size)
+    }
+
+    private var placeholder: some View {
+        Image(systemName: "person.fill").font(.system(size: size * 0.45)).foregroundStyle(.secondary)
     }
 }

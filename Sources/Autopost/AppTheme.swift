@@ -39,6 +39,18 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralSettingsView()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            InstagramSettingsView()
+                .tabItem { Label("Instagram", systemImage: "person.crop.square") }
+        }
+        .frame(width: 460)
+    }
+}
+
+private struct GeneralSettingsView: View {
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
 
     var body: some View {
@@ -49,7 +61,6 @@ struct SettingsView: View {
             .pickerStyle(.inline)
         }
         .padding(24)
-        .frame(width: 320)
     }
 }
 
