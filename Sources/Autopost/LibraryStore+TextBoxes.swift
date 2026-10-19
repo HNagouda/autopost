@@ -5,7 +5,7 @@ import Foundation
 /// Per-photo changes: the photo's own border and position, and its text boxes.
 extension LibraryStore {
     // Pasteboard type for a copied text box. Plain text goes alongside, so pasting into other apps gives the words.
-    static let textBoxPasteboardType = NSPasteboard.PasteboardType("nl.harsh.autopost.textbox")
+    static let textBoxPasteboardType = NSPasteboard.PasteboardType("\(AppIdentity.bundleID).textbox")
 
     func photo(_ photoID: Photo.ID, in postID: Post.ID) -> Photo? {
         post(postID)?.photos.first { $0.id == photoID }

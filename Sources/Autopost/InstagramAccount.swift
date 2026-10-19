@@ -103,7 +103,7 @@ final class InstagramAccount {
 
 /// The access token as a generic password in the login Keychain, never in UserDefaults or the library JSON.
 private enum TokenKeychain {
-    static let service = "nl.harsh.autopost.instagram"
+    static let service = "\(AppIdentity.bundleID).instagram"
     static let account = "access-token"
 
     struct Failure: Error {

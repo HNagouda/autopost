@@ -5,6 +5,8 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Autopost.app"
 VERSION="${VERSION:-1.0}"
+# Forks should set their own, e.g. BUNDLE_ID=io.github.yourname.autopost, so their Keychain items and settings are separate.
+BUNDLE_ID="${BUNDLE_ID:-io.github.hnagouda.autopost}"
 
 # The macOS 27 SDK turns @State into a macro whose plugin only ships with Xcode; the 26.5 SDK does not.
 # Only pinned when it exists, so CI runners with Xcode keep their own SDK.
@@ -28,7 +30,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key><string>Autopost</string>
     <key>CFBundleDisplayName</key><string>Autopost</string>
-    <key>CFBundleIdentifier</key><string>nl.harsh.autopost</string>
+    <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key><string>Autopost</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
