@@ -86,16 +86,6 @@ private struct TextBoxInspector: View {
     let photoID: Photo.ID
     let box: TextBox
 
-    // Shown first; the rest of the installed families follow.
-    private static let favoriteFamilies = [
-        TextBox.systemFontFamily, "Helvetica Neue", "Avenir Next", "Futura", "Gill Sans", "Didot",
-        "Baskerville", "Georgia", "American Typewriter", "Courier New", "Snell Roundhand",
-    ]
-    // Font size limits as a fraction of the canvas width.
-    private static let sizeRange = 0.01...0.2
-    // Reference width for showing font size in pixels, the Instagram export width.
-    private static let referenceWidth = 1080.0
-
     @Environment(LibraryStore.self) private var store
     @Environment(EditorSession.self) private var editor
     @FocusState private var isTextFocused: Bool
@@ -112,26 +102,10 @@ private struct TextBoxInspector: View {
                     editor.wantsTextFocus = false
                 }
 
-            Picker("Font", selection: binding(\.fontFamily)) {
-                ForEach(Self.favoriteFamilies, id: \.self) { family in
-                    Text(family == TextBox.systemFontFamily ? "System (SF Pro)" : family).tag(family)
-                }
-                Divider()
-                ForEach(Self.otherFamilies, id: \.self) { Text($0).tag($0) }
-            }
-
-            LabeledContent("Size") {
-                Slider(value: binding(\.size), in: Self.sizeRange)
-                Text("\(Int((box.size * Self.referenceWidth).rounded())) px")
-                    .monospacedDigit().frame(width: 48, alignment: .trailing)
-                    .help("Size on a 1080 px export")
-            }
-
-            LabeledContent("Style") {
-                Toggle(isOn: binding(\.isBold)) { Image(systemName: "bold") }
-                    .toggleStyle(.button).help("Bold")
-                Toggle(isOn: binding(\.isItalic)) { Image(systemName: "italic") }
-                    .toggleStyle(.button).help("Italic")
+            TextStyleControls(
+                fontFamily: binding(\.fontFamily), size: binding(\.size),
+                isBold: binding(\.isBold), isItalic: binding(\.isItalic), tracking: binding(\.tracking)
+            ) {
                 Picker("Alignment", selection: binding(\.alignment)) {
                     Image(systemName: "text.alignleft").tag(TextBoxAlignment.leading)
                     Image(systemName: "text.aligncenter").tag(TextBoxAlignment.center)
@@ -140,10 +114,6 @@ private struct TextBoxInspector: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
-            }
-
-            LabeledContent("Spacing") {
-                Slider(value: binding(\.tracking), in: -0.05...0.5)
             }
 
             ColorSwatchRow(color: binding(\.color), swatches: ColorSwatchRow.textColors)
@@ -159,11 +129,6 @@ private struct TextBoxInspector: View {
             }
         }
     }
-
-    private static let otherFamilies: [String] = {
-        let favorites = Set(favoriteFamilies)
-        return NSFontManager.shared.availableFontFamilies.filter { !favorites.contains($0) && !$0.hasPrefix(".") }
-    }()
 
     private func binding<Value>(_ keyPath: WritableKeyPath<TextBox, Value>) -> Binding<Value> {
         Binding(

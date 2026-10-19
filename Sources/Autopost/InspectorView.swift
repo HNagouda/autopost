@@ -82,6 +82,25 @@ struct InspectorView: View {
                     // A bare title becomes the row's label in a grouped form, so the hint goes in the prompt.
                     TextField("Caption", text: frame.captionText, prompt: Text("Kodak Gold 200 · Monterey"))
                 }
+                if frame.wrappedValue.captionMode != .off {
+                    TextStyleControls(
+                        fontFamily: frame.captionFontFamily, size: frame.captionSize,
+                        isBold: frame.captionIsBold, isItalic: frame.captionIsItalic, tracking: frame.captionTracking
+                    )
+                    Toggle("Automatic colour", isOn: Binding(
+                        get: { frame.wrappedValue.captionColor == nil },
+                        set: { isAutomatic in
+                            frame.wrappedValue.captionColor = isAutomatic ? nil : frame.wrappedValue.automaticCaptionColor
+                        }
+                    ))
+                    .help("Dark text on a light frame, light text on a dark frame or blurred photo")
+                    if let color = frame.wrappedValue.captionColor {
+                        ColorSwatchRow(
+                            color: Binding(get: { color }, set: { frame.wrappedValue.captionColor = $0 }),
+                            swatches: ColorSwatchRow.textColors
+                        )
+                    }
+                }
             }
 
             Section("Presets") {

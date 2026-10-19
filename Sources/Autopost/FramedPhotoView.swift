@@ -30,11 +30,9 @@ struct FramedPhotoView: View {
             ZStack(alignment: .topLeading) {
                 background(thumbnail, layout: layout)
                 photoLayer(thumbnail, layout: layout)
-                if let caption = frame.caption(exifLine: thumbnail?.exifLine), let rect = layout.captionRect {
-                    captionLayer(caption, rect: rect, width: width)
-                }
-                if !photo.textBoxes.isEmpty {
-                    textLayer(size: layout.canvasSize)
+                let boxes = textBoxes(thumbnail, layout: layout)
+                if !boxes.isEmpty {
+                    textLayer(boxes, size: layout.canvasSize)
                 }
             }
             .frame(width: width, height: layout.canvasSize.height)
@@ -63,14 +61,20 @@ struct FramedPhotoView: View {
         return FrameLayout(imageSize: imageSize(thumbnail), frame: frame, canvasWidth: width, hasCaption: hasCaption)
     }
 
+    /// The caption, when there is one, followed by the photo's own text boxes, as the exporter draws them.
+    private func textBoxes(_ thumbnail: ThumbnailStore.Thumbnail?, layout: FrameLayout) -> [TextBox] {
+        let caption = frame.caption(exifLine: thumbnail?.exifLine).flatMap { frame.captionBox($0, in: layout) }
+        return (caption.map { [$0] } ?? []) + photo.textBoxes
+    }
+
     /// Drawn by the exporter's own Core Text code, so line breaks and spacing match the JPEG exactly.
-    private func textLayer(size: CGSize) -> some View {
+    private func textLayer(_ boxes: [TextBox], size: CGSize) -> some View {
         Canvas { context, canvasSize in
             context.withCGContext { cgContext in
                 // Canvas has a top-left origin; the renderer expects Core Graphics' bottom-left one.
                 cgContext.translateBy(x: 0, y: canvasSize.height)
                 cgContext.scaleBy(x: 1, y: -1)
-                TextBoxRenderer.draw(photo.textBoxes, in: cgContext, canvasSize: canvasSize)
+                TextBoxRenderer.draw(boxes, in: cgContext, canvasSize: canvasSize)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -119,19 +123,6 @@ struct FramedPhotoView: View {
             y: FrameRenderer.shadowOffsetFraction * width
         )
         .offset(x: rect.minX, y: rect.minY)
-    }
-
-    private func captionLayer(_ caption: String, rect: CGRect, width: Double) -> some View {
-        let isDarkText = frame.background == .color && frame.color.isLight
-        let fontSize = FrameLayout.captionFontFraction * width
-        return Text(caption)
-            .font(.system(size: fontSize))
-            .kerning(0.04 * fontSize)
-            .foregroundStyle(Color(white: isDarkText ? 0.32 : 0.92))
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .frame(width: rect.width, height: rect.height)
-            .offset(x: rect.minX, y: rect.minY)
     }
 }
 
