@@ -10,11 +10,22 @@ struct PhotoEditorView: View {
     private static let nudgeStep = 0.002
     private static let canvasPadding = 40.0
 
+    // Hardware key codes, which stay the same on every keyboard layout.
+    private enum KeyCode {
+        static let delete: UInt16 = 51
+        static let forwardDelete: UInt16 = 117
+        static let escape: UInt16 = 53
+        static let left: UInt16 = 123
+        static let right: UInt16 = 124
+        static let down: UInt16 = 125
+        static let up: UInt16 = 126
+    }
+
     @Environment(LibraryStore.self) private var store
     @Environment(EditorSession.self) private var editor
     @Environment(ThumbnailStore.self) private var thumbnails
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
-    @FocusState private var isCanvasFocused: Bool
+    @State private var keyMonitor: Any?
 
     var body: some View {
         let post = store.post(postID)
@@ -28,15 +39,8 @@ struct PhotoEditorView: View {
             }
         }
         .background(theme.canvasBackground)
-        .focusable()
-        .focusEffectDisabled()
-        .focused($isCanvasFocused)
-        .onAppear { isCanvasFocused = true }
-        .onExitCommand { editor.close() }
-        .onDeleteCommand { editor.deleteSelectedBox(in: store, postID: postID) }
-        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
-            arrowKey(press.key, isShifted: press.modifiers.contains(.shift))
-        }
+        .onAppear { startKeyMonitor() }
+        .onDisappear { stopKeyMonitor() }
         .onChange(of: store.post(postID)?.photos.map(\.id)) {
             // The open photo was removed or moved to another post.
             if let id = editor.photoID, store.photo(id, in: postID) == nil { editor.close() }
@@ -79,38 +83,79 @@ struct PhotoEditorView: View {
         Toggle("Show Grid", isOn: Binding(get: { editor.isShowingGrid }, set: { editor.isShowingGrid = $0 }))
     }
 
-    /// Takes the cursor out of any inspector text field, so ⌘C and ⌘V act on text boxes again.
+    /// Takes the cursor out of any inspector text field, so the keyboard acts on text boxes again.
     private func focusCanvas() {
         NSApp.keyWindow?.makeFirstResponder(nil)
-        isCanvasFocused = true
     }
 
     // * ====================================================================
     // * === actions
     // * ====================================================================
 
+    // * ====================================================================
+    // * === keyboard
+    // * ====================================================================
+
+    /// Watches key presses in the editor window directly. SwiftUI's key handlers only fire while the canvas
+    /// holds focus, and clicking a text box does not reliably give it focus.
+    private func startKeyMonitor() {
+        let window = NSApp.keyWindow
+        let store = store
+        let editor = editor
+        let postID = postID
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.window === window else { return event }
+            return Self.handleKey(event, store: store, editor: editor, postID: postID) ? nil : event
+        }
+    }
+
+    private func stopKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    /// True when the key was used. Typing in a text field and shortcuts with ⌘, ⌥ or ⌃ pass through untouched.
+    private static func handleKey(_ event: NSEvent, store: LibraryStore, editor: EditorSession, postID: Post.ID) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control])
+        guard modifiers.isEmpty, !(event.window?.firstResponder is NSText) else { return false }
+
+        switch event.keyCode {
+        case KeyCode.delete, KeyCode.forwardDelete:
+            guard editor.selectedTextBoxID != nil else { return false }
+            editor.deleteSelectedBox(in: store, postID: postID)
+            return true
+        case KeyCode.escape:
+            if editor.selectedTextBoxID != nil { editor.select(nil) } else { editor.close() }
+            return true
+        case KeyCode.left, KeyCode.right, KeyCode.up, KeyCode.down:
+            return arrowKey(event.keyCode, isShifted: event.modifierFlags.contains(.shift), store: store, editor: editor, postID: postID)
+        default:
+            return false
+        }
+    }
+
     /// Nudges the selected box, or steps through the post when nothing is selected.
-    private func arrowKey(_ key: KeyEquivalent, isShifted: Bool) -> KeyPress.Result {
-        guard let photoID = editor.photoID, let post = store.post(postID) else { return .ignored }
+    private static func arrowKey(_ keyCode: UInt16, isShifted: Bool, store: LibraryStore, editor: EditorSession, postID: Post.ID) -> Bool {
+        guard let photoID = editor.photoID, let post = store.post(postID) else { return false }
 
         if var box = editor.selectedBox(in: store, postID: postID) {
-            let step = Self.nudgeStep * (isShifted ? 10 : 1)
-            switch key {
-            case .leftArrow: box.x -= step
-            case .rightArrow: box.x += step
-            case .upArrow: box.y -= step
+            let step = nudgeStep * (isShifted ? 10 : 1)
+            switch keyCode {
+            case KeyCode.left: box.x -= step
+            case KeyCode.right: box.x += step
+            case KeyCode.up: box.y -= step
             default: box.y += step
             }
             store.updateTextBox(box, on: photoID, in: postID)
-            return .handled
+            return true
         }
 
-        guard key == .leftArrow || key == .rightArrow, let index = post.photos.firstIndex(where: { $0.id == photoID }) else {
-            return .ignored
-        }
-        let next = key == .leftArrow ? index - 1 : index + 1
+        guard keyCode == KeyCode.left || keyCode == KeyCode.right,
+              let index = post.photos.firstIndex(where: { $0.id == photoID })
+        else { return false }
+        let next = keyCode == KeyCode.left ? index - 1 : index + 1
         if post.photos.indices.contains(next) { editor.open(post.photos[next].id) }
-        return .handled
+        return true
     }
 }
 
