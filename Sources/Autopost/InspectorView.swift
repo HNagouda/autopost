@@ -18,9 +18,11 @@ struct InspectorView: View {
                 RatioPicker(frame: frame)
                 if frame.wrappedValue.ratio == .custom {
                     HStack {
-                        TextField("Width", value: frame.customRatioWidth, format: .number)
+                        TextField("Width", value: frame.customRatioWidth, format: .number, prompt: Text("Width"))
+                            .labelsHidden()
                         Text(":")
-                        TextField("Height", value: frame.customRatioHeight, format: .number)
+                        TextField("Height", value: frame.customRatioHeight, format: .number, prompt: Text("Height"))
+                            .labelsHidden()
                         Button("Save") {
                             store.saveRatio(width: frame.wrappedValue.customRatioWidth, height: frame.wrappedValue.customRatioHeight)
                         }
@@ -77,7 +79,8 @@ struct InspectorView: View {
                     Text("Custom").tag(CaptionMode.custom)
                 }
                 if frame.wrappedValue.captionMode == .custom {
-                    TextField("Kodak Gold 200 · Monterey", text: frame.captionText)
+                    // A bare title becomes the row's label in a grouped form, so the hint goes in the prompt.
+                    TextField("Caption", text: frame.captionText, prompt: Text("Kodak Gold 200 · Monterey"))
                 }
             }
 
