@@ -18,9 +18,11 @@ Drop in your edits, pick a ratio, and get a whole carousel ready to post in one 
 
 ## Why this exists
 
-Lightroom on the Mac can't export a photo with a white border. Lightroom mobile can, so posting used to mean editing on the Mac, sending everything to the phone, and exporting each photo again from there. Autopost does the border on your Mac instead.
+Autopost was born out of necessity. I edit in Lightroom on the Mac, and Lightroom on the Mac can't export a photo with a white border. Lightroom mobile can, so every post meant editing on the Mac, opening everything again in Lightroom mobile, and exporting each photo from there with a border. I refused to install Lightroom Classic next to Lightroom just to get borders, and Photoshop would have meant framing every photo one by one. So I built the thing I wanted instead.
 
 You group photos into posts, the way you'd plan a carousel, and pick one shape for the whole post (4:5, 3:4, square and so on). Your photo is never cropped, only padded with a border. Then you export the whole post at once, or send it straight to your phone with AirDrop.
+
+In full transparency, Autopost is vibe coded. I described what I wanted and [Claude Code](https://claude.com/claude-code) wrote most of the code, while I tested every feature on my own photos and steered it. It's open source, so every line is there to read.
 
 ## What it does
 
