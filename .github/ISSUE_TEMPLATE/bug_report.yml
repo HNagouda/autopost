@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in Autopost does not work the way it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a post with two portrait photos
+        2. Pick 4:5 and a 10% border
+        3. Export
+  - type: input
+    id: version
+    attributes:
+      label: Autopost version
+      description: Autopost > About Autopost, or the release you downloaded.
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 26.1
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or exported files
+      description: Drag images in here if they help show the problem.
