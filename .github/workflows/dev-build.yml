@@ -1,6 +1,6 @@
 name: Dev build
 
-# Every push to dev replaces the "dev" prerelease with a fresh build, so there is always one to download and try.
+# Every push to dev replaces the "dev-build" prerelease with a fresh build, so there is always one to download and try.
 on:
   push:
     branches: [dev]
@@ -33,9 +33,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view dev > /dev/null 2>&1; then
-            gh release delete dev --cleanup-tag --yes
+          # The tag is not called "dev", because a tag and a branch with the same name make git refs ambiguous.
+          if gh release view dev-build > /dev/null 2>&1; then
+            gh release delete dev-build --cleanup-tag --yes
           fi
-          gh release create dev Autopost-dev.zip --prerelease --target "$GITHUB_SHA" \
+          gh release create dev-build Autopost-dev.zip --prerelease --target "$GITHUB_SHA" \
             --title "Dev build ${{ steps.version.outputs.version }}" \
             --notes "Latest build of the dev branch, commit $GITHUB_SHA. Not a release; it changes with every push to dev."
