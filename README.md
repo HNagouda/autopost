@@ -47,6 +47,8 @@ In full transparency, Autopost is vibe coded. I described what I wanted and [Cla
   </tr>
 </table>
 
+<p align="center"><img src="docs/screenshots/main-amoled.png" alt="Autopost in the pure black theme" width="900"><br>The pure black theme, for checking white borders the way an OLED phone shows them</p>
+
 ## Installing it
 
 1. Download **Autopost-v….zip** from the [latest release](https://github.com/HNagouda/autopost/releases/latest). It's under "Assets" at the bottom of that page.
