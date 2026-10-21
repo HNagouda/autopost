@@ -1,0 +1,9 @@
+node_modules/
+out/
+# Screen recordings and exported photos are large binaries, rebuilt by hand.
+public/clips/
+public/photos/
+public/willow.jpg
+# The raw voiceover takes and the cleaned clips made from them.
+voiceover/
+public/vo/
