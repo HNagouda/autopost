@@ -4,6 +4,11 @@ name: Release
 on:
   push:
     branches: [main]
+    # A merge that only touches the launch video or the workflows ships the same app, so it
+    # should not publish a new version. A merge that also changes the app still releases.
+    paths-ignore:
+      - "promo/**"
+      - ".github/workflows/**"
 
 permissions:
   contents: write
