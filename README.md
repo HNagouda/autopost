@@ -47,13 +47,15 @@ In full transparency, Autopost is vibe coded. I described what I wanted and [Cla
   </tr>
 </table>
 
+<p align="center"><img src="docs/screenshots/main-amoled.png" alt="Autopost in the pure black theme" width="900"><br>The pure black theme, for checking white borders the way an OLED phone shows them</p>
+
 ## Installing it
 
 1. Download **Autopost-v….zip** from the [latest release](https://github.com/HNagouda/autopost/releases/latest). It's under "Assets" at the bottom of that page.
 2. Double-click the zip to unzip it, then drag **Autopost** into your Applications folder.
 3. Open Autopost. The first time, macOS says it can't check the app, because it isn't registered with Apple yet. Click Done, then open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the message about Autopost. You only need to do this once.
 
-Autopost needs macOS 14 Sonoma or newer.
+Autopost needs macOS 14 Sonoma or newer, and runs on both Apple Silicon and Intel Macs.
 
 ## Using it
 
