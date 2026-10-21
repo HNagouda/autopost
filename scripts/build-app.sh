@@ -17,11 +17,21 @@ if [ -z "${SDKROOT:-}" ] && [ -d "$CLT_SDK" ] && [ "$(xcode-select -p)" = "/Libr
 fi
 
 cd "$ROOT"
-swift build -c release --product Autopost
+# One build per architecture, each in its own folder because both would otherwise write to the same
+# output path. lipo then joins them into a universal app that runs natively on Apple Silicon and Intel.
+ARCHITECTURES="arm64 x86_64"
+for arch in $ARCHITECTURES; do
+    swift build -c release --product Autopost --triple "$arch-apple-macosx14.0" --scratch-path ".build/$arch"
+done
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$(swift build -c release --show-bin-path)/Autopost" "$APP/Contents/MacOS/Autopost"
+binaries=""
+for arch in $ARCHITECTURES; do
+    binaries="$binaries $(swift build -c release --triple "$arch-apple-macosx14.0" --scratch-path ".build/$arch" --show-bin-path)/Autopost"
+done
+# $binaries is unquoted on purpose, so each path becomes its own argument.
+lipo -create $binaries -output "$APP/Contents/MacOS/Autopost"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST

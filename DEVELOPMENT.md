@@ -29,6 +29,8 @@ If you ship your own build, set your own bundle identifier, so your Keychain ite
 BUNDLE_ID=io.github.yourname.autopost ./scripts/build-app.sh
 ```
 
+The app is universal. `build-app.sh` builds once for `arm64` and once for `x86_64`, each in its own folder under `.build/`, and joins the two with `lipo`. CI runs the tests on an Intel runner (`macos-15-intel`) as well, because the main build job runs on Apple Silicon and never executes the Intel half.
+
 With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, because the macOS 27 SDK turns `@State` into a macro whose plugin only ships with Xcode. With Xcode installed, its own SDK is used.
 
 ## How the preview stays honest
@@ -70,7 +72,7 @@ Sources/Autopost/              the SwiftUI app
   PhonePreviewView.swift       phone mockup window, feed and profile grid, light and dark
   InstagramAccount.swift       the optional Instagram connection, token kept in the Keychain
 Tests/AutopostCoreTests/       layout, text, snapping, library loading and Instagram response tests
-scripts/build-app.sh           builds build/Autopost.app
+scripts/build-app.sh           builds build/Autopost.app for Apple Silicon and Intel
 scripts/test.sh                runs the tests
 scripts/next-version.sh        prints the version the next release on main will get
 scripts/make-icon.sh           regenerates Resources/AppIcon.icns
