@@ -55,7 +55,7 @@ In full transparency, Autopost is vibe coded. I described what I wanted and [Cla
 2. Double-click the zip to unzip it, then drag **Autopost** into your Applications folder.
 3. Open Autopost. The first time, macOS says it can't check the app, because it isn't registered with Apple yet. Click Done, then open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the message about Autopost. You only need to do this once.
 
-Autopost needs macOS 14 Sonoma or newer.
+Autopost needs macOS 14 Sonoma or newer, and runs on both Apple Silicon and Intel Macs.
 
 ## Using it
 

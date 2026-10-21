@@ -108,7 +108,8 @@ public enum TextBoxRenderer {
         let ascent = CTFontGetAscent(font)
         let lineHeight = ascent + CTFontGetDescent(font) + CTFontGetLeading(font)
         let texts = box.text.components(separatedBy: .newlines)
-        let top = box.y * canvasSize.height - Double(texts.count) * lineHeight / 2
+        // Spelled out in CGFloat because the Swift 6.1 compiler on the Intel CI runner finds the mixed Double version ambiguous.
+        let top = CGFloat(box.y) * canvasSize.height - CGFloat(texts.count) * lineHeight / 2
         let anchor = box.x * canvasSize.width
 
         return texts.enumerated().map { index, text in

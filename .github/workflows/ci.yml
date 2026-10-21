@@ -14,6 +14,18 @@ jobs:
         run: swift test
       - name: Build app bundle
         run: ./scripts/build-app.sh
+      - name: Check the app runs on Apple Silicon and Intel
+        run: |
+          lipo build/Autopost.app/Contents/MacOS/Autopost -verify_arch arm64
+          lipo build/Autopost.app/Contents/MacOS/Autopost -verify_arch x86_64
+
+  # The build job runs on Apple Silicon, so the Intel half of the universal app is only tested here.
+  test-intel:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test
+        run: swift test
 
   # main only takes merges from dev, so everything released has been through a dev build first.
   main-only-from-dev:
