@@ -39,7 +39,7 @@ With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, b
 
 Text boxes and the caption follow the same rule through `TextBoxRenderer`, and the preview draws them with the exporter's own Core Text code. Text is laid out on a fixed 1000-unit canvas and then scaled. Fonts like SF change shape between sizes, so laying text out at the real size would make the export wider or narrower than the preview.
 
-Exports are sRGB JPEGs, 1080 px wide by default, because Instagram stores feed photos at that width and resamples anything larger itself. Light output sharpening offsets the softening from downscaling, and EXIF is kept with orientation reset and GPS removed unless the user opts out.
+Exports are sRGB JPEGs, 1080 px wide by default, because Instagram stores feed photos at that width and resamples anything larger itself. Light output sharpening offsets the softening from downscaling, and EXIF is kept with orientation reset. GPS and written place names are removed unless the user opts out, and serial numbers and owner names are always removed.
 
 ## Layout
 
@@ -48,6 +48,8 @@ Package.swift                  SwiftPM package, one library and one app target
 Sources/AutopostCore/          everything that can run without a window
   AspectRatio.swift            built-in ratios, saved ratios, and the ratios the Instagram feed allows
   FrameSettings.swift          border, background and caption settings, plus per-photo adjustments
+  CropRect.swift               a photo's crop as fractions of the photo, and the maths for dragging its handles
+  CameraSettings.swift         the camera settings a caption prints, from the EXIF with the user's names and edits on top
   FrameLayout.swift            photo and caption rects on the canvas
   TextBox.swift                text boxes and the Core Text code that lays them out and draws them
   TextSnapping.swift           the grid and guide lines a dragged text box snaps to
@@ -60,18 +62,27 @@ Sources/AutopostCore/          everything that can run without a window
 Sources/Autopost/              the SwiftUI app
   AppIdentity.swift            the bundle identifier that names Keychain items and pasteboard data
   LibraryStore.swift           the library, saved to Application Support/Autopost/library.json
+  LibraryStore+Photos.swift    adding, moving, reordering and removing a post's photos
   LibraryBackups.swift         timestamped copies of library.json in the Backups folder next to it
   ThumbnailStore.swift         preview images, decoded once off the main thread
   ExportController.swift       runs exports, then reveals them in Finder or sends them with AirDrop
-  PostGridView.swift           the photos of a post, framed, drag to reorder
+  PostGridView.swift           the photos of a post, framed, drag to reorder, plus its selection bar and keys
+  Toast.swift                  the short note under the photos after a move or delete, with Undo
+  KeyCode.swift                key codes and the typed carousel position shared by the grid and editor keys
+  WindowReader.swift           tells a key monitor which window its view is in
+  CropView.swift               the crop handles and shapes shown in the editor while cropping
+  TourView.swift               the tour that opens on first launch and from the Help menu
   InspectorView.swift          frame settings for the selected post
   TextStyleControls.swift      font, size, style and spacing controls shared by text boxes and the caption
+  SliderValueField.swift       the number beside a slider, which can also be typed into
+  ClickToEndEditing.swift      ends typing in a text field when the user clicks anywhere outside it
   PhotoEditorView.swift        one photo, large, with its text boxes, a filmstrip and keyboard handling
   TextBoxOverlay.swift         selecting, dragging and snapping text boxes on the editor canvas
-  PhotoInspector.swift         the open photo's own border and position, and text box styling
-  PhonePreviewView.swift       phone mockup window, feed and profile grid, light and dark
+  PhotoInspector.swift         the open photo's own border, position, crop and camera settings, and text box styling
+  PhonePreviewView.swift       phone mockup panel beside the photos, feed and profile grid, light and dark
+  ScrollDirectionLock.swift    keeps a trackpad scroll in the feed from sliding a carousel sideways
   InstagramAccount.swift       the optional Instagram connection, token kept in the Keychain
-Tests/AutopostCoreTests/       layout, text, snapping, library loading and Instagram response tests
+Tests/AutopostCoreTests/       layout, crop, camera settings, text, snapping, library loading, export and Instagram tests
 scripts/build-app.sh           builds build/Autopost.app for Apple Silicon and Intel
 scripts/test.sh                runs the tests
 scripts/next-version.sh        prints the version the next release on main will get
@@ -104,6 +115,8 @@ feature/text-shadows ──PR──▶ dev ──PR──▶ main
 - Every pull request runs the tests and builds the app.
 - Every push to `dev` replaces the [dev prerelease](https://github.com/HNagouda/autopost/releases/tag/dev-build) with a fresh `Autopost-dev.zip`, so there is always a build of the latest work to try.
 - Every merge into `main` publishes the next release, with notes generated from the merged pull requests.
+
+Add what a pull request changes for users to [CHANGELOG.md](CHANGELOG.md), under the version it will ship in. The tour in `TourView.swift` shows new users the shortcuts, so a new shortcut belongs there too.
 
 The `VERSION` file holds the major and minor version, like `1.0`. Each release on `main` takes the next patch number, so releases go `v1.0.0`, `v1.0.1`, and so on. To start `1.1.0` or `2.0.0`, change `VERSION` in the pull request that should carry it. `scripts/next-version.sh` prints the version the next release will get.
 

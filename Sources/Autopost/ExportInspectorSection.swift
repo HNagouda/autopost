@@ -19,8 +19,7 @@ struct ExportInspectorSection: View {
             }
             LabeledContent("Quality") {
                 Slider(value: settings.quality, in: 0.6...1)
-                Text("\(Int((settings.wrappedValue.quality * 100).rounded()))")
-                    .monospacedDigit().frame(width: 30, alignment: .trailing)
+                SliderValueField(value: settings.quality, range: 0.6...1, scale: 100, width: 36)
             }
             Toggle("Output sharpening", isOn: settings.isSharpening)
             Toggle("Keep camera metadata", isOn: settings.keepsMetadata)

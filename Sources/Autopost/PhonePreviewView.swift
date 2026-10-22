@@ -17,15 +17,26 @@ enum PhoneScheme: String, CaseIterable {
     var screenBackground: Color { self == .light ? .white : .black }
 }
 
-/// A phone showing the selected post in a feed and on a profile grid, updated live as the frame changes.
+/// A phone showing the selected post in a feed and on a profile grid, in a panel beside the photos, updated live
+/// as the frame changes.
 struct PhonePreviewView: View {
+    static let shownKey = "isPhonePreviewShown"
+    // Wide enough for the controls on one row and a phone that is still readable.
+    static let panelWidth = 320.0
+    // Used by ⇧P and the menu command alike, so the panel slides the same way from both.
+    static let panelAnimation = Animation.easeOut(duration: 0.25)
+
     // iPhone 15 screen in points; the phone is drawn at this size and scaled to the window.
     static let screenSize = CGSize(width: 393, height: 852)
     static let bezel = 12.0
     static let cornerRadius = 55.0
+    // The panel can be laid out at zero size for a moment at launch. A zero scale cannot be inverted and makes
+    // AppKit stop the app, so the phone never shrinks below this.
+    private static let minimumScale = 0.05
 
     @Environment(LibraryStore.self) private var store
     @Environment(InstagramAccount.self) private var instagram
+    @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
     @AppStorage("phoneScreen") private var screen = PhoneScreen.feed
     @AppStorage("phoneScheme") private var scheme = PhoneScheme.light
     @AppStorage("phoneHandle") private var handle = "your.handle"
@@ -35,19 +46,18 @@ struct PhonePreviewView: View {
             controls
             GeometryReader { geometry in
                 let phone = CGSize(width: Self.screenSize.width + 2 * Self.bezel, height: Self.screenSize.height + 2 * Self.bezel)
-                let scale = min(geometry.size.width / phone.width, geometry.size.height / phone.height, 1.2)
+                let scale = max(min(geometry.size.width / phone.width, geometry.size.height / phone.height, 1.2), Self.minimumScale)
                 phoneBody
                     .scaleEffect(scale)
                     .frame(width: geometry.size.width, height: geometry.size.height)
             }
         }
-        .padding(20)
-        .frame(minWidth: 320, minHeight: 600)
-        .background(.background.secondary)
+        .padding(16)
+        .background(theme.canvasBackground)
     }
 
     private var controls: some View {
-        HStack {
+        HStack(spacing: 8) {
             Picker("Screen", selection: $screen) {
                 Label("Feed", systemImage: "house").tag(PhoneScreen.feed)
                 Label("Profile", systemImage: "square.grid.3x3").tag(PhoneScreen.profile)
@@ -67,9 +77,7 @@ struct PhonePreviewView: View {
 
             // A connected account shows its real username, so there is nothing to type.
             if !instagram.isConnected {
-                TextField("Handle", text: $handle)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 140)
+                HandleField(handle: $handle)
             }
         }
     }
@@ -143,5 +151,34 @@ private struct PhoneTabBar: View {
         .padding(.top, 10)
         .frame(height: 82, alignment: .top)
         .overlay(alignment: .top) { Divider() }
+    }
+}
+
+/// The handle as plain text until clicked. A text field here would take the cursor as soon as the window opens,
+/// and then ⇧P would type a P instead of closing the preview.
+private struct HandleField: View {
+    @Binding var handle: String
+
+    @State private var isEditing = false
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        if isEditing {
+            TextField("Handle", text: $handle)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 140)
+                .focused($isFocused)
+                .onSubmit { isEditing = false }
+                .onExitCommand { isEditing = false }
+                .onChange(of: isFocused) {
+                    if !isFocused { isEditing = false }
+                }
+                .onAppear { Task { @MainActor in isFocused = true } }
+        } else {
+            Button("@\(handle)") { isEditing = true }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Click to change the handle shown on the phone")
+        }
     }
 }

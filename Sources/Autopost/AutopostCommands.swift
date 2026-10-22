@@ -9,10 +9,11 @@ struct AutopostCommands: Commands {
 
     @Environment(\.openWindow) private var openWindow
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
+    @AppStorage(PhonePreviewView.shownKey) private var isPhoneShown = false
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Post") { store.createPost() }
+            Button("New Post") { store.createPost(startsRenaming: true) }
                 .keyboardShortcut("n")
             Button("Add Photos…") { store.addPhotosToSelectedPost(FileImport.choosePhotos(allowsFolders: false)) }
                 .keyboardShortcut("o")
@@ -20,6 +21,18 @@ struct AutopostCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             Divider()
             Button("Restore from Backup…") { openWindow(id: WindowID.backups) }
+        }
+
+        // While typing in a text field, ⌘Z undoes the typing; everywhere else it undoes the last change to the library.
+        CommandGroup(replacing: .undoRedo) {
+            Button("Undo") {
+                if isEditingText { forward(Selector(("undo:"))) } else { store.undo() }
+            }
+            .keyboardShortcut("z")
+            Button("Redo") {
+                if isEditingText { forward(Selector(("redo:"))) } else { store.redo() }
+            }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
         }
 
         // Text fields keep normal copy and paste; elsewhere in the editor these act on the selected text box.
@@ -48,6 +61,8 @@ struct AutopostCommands: Commands {
             .keyboardShortcut("v")
             Button("Select All") { forward(#selector(NSText.selectAll(_:))) }
                 .keyboardShortcut("a")
+            Button("Delete") { deleteSelection() }
+                .keyboardShortcut(.delete, modifiers: .command)
         }
 
         CommandMenu("Post") {
@@ -65,8 +80,14 @@ struct AutopostCommands: Commands {
             .keyboardShortcut("t")
             .disabled(!editor.isOpen)
             Divider()
-            Button("Phone Preview") { openWindow(id: WindowID.phone) }
-                .keyboardShortcut("p", modifiers: [.command, .option])
+            Button(isPhoneShown ? "Hide Phone Preview" : "Show Phone Preview") {
+                withAnimation(PhonePreviewView.panelAnimation) { isPhoneShown.toggle() }
+            }
+            .keyboardShortcut("p", modifiers: [.command, .option])
+        }
+
+        CommandGroup(replacing: .help) {
+            Button("Autopost Tour") { openWindow(id: WindowID.tour) }
         }
 
         CommandGroup(after: .toolbar) {
@@ -84,6 +105,20 @@ struct AutopostCommands: Commands {
     // Commands only run with a post selected in practice; the nil UUID matches nothing, so the box actions do nothing.
     private var selectedPostID: Post.ID {
         store.selectedPostID ?? UUID()
+    }
+
+    /// ⌘⌫ removes what is selected in the main window, the way Delete does. In a text field it keeps its usual
+    /// meaning, deleting to the start of the line.
+    private func deleteSelection() {
+        if isEditingText {
+            forward(#selector(NSResponder.deleteToBeginningOfLine(_:)))
+        } else if !WindowID.isMain(NSApp.keyWindow) || editor.isCropping {
+            return
+        } else if editor.isOpen {
+            editor.deleteSelection(in: store, postID: selectedPostID)
+        } else {
+            store.deleteSelection(isSidebarFocused: NSApp.keyWindow?.firstResponder is NSTableView)
+        }
     }
 
     private func forward(_ action: Selector) {

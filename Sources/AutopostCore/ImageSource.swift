@@ -56,29 +56,29 @@ public struct ImageSource {
         return orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
     }
 
-    /// "SONY ILCE-7M4 · 35mm · ƒ/2 · 1/250s · ISO 100", or nil for scans and screenshots with no camera data.
-    public var exifLine: String? {
+    /// What the EXIF says, written the way the caption prints it. All nil for scans and screenshots with no camera data.
+    public var cameraSettings: CameraSettings {
         let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-        var parts: [String] = []
+        var settings = CameraSettings()
 
         if let model = tiff[kCGImagePropertyTIFFModel] as? String {
-            parts.append(model.trimmingCharacters(in: .whitespaces))
+            settings.camera = model.trimmingCharacters(in: .whitespaces)
         }
         if let focal = exif[kCGImagePropertyExifFocalLength] as? Double {
-            parts.append("\(Int(focal.rounded()))mm")
+            settings.focalLength = "\(Int(focal.rounded()))mm"
         }
         if let aperture = exif[kCGImagePropertyExifFNumber] as? Double {
-            parts.append("ƒ/\(aperture.formatted(.number.precision(.fractionLength(0...1))))")
+            settings.aperture = "ƒ/\(aperture.formatted(.number.precision(.fractionLength(0...1))))"
         }
         if let exposure = exif[kCGImagePropertyExifExposureTime] as? Double, exposure > 0 {
-            parts.append(Self.shutterLabel(exposure))
+            settings.shutter = Self.shutterLabel(exposure)
         }
         if let isos = exif[kCGImagePropertyExifISOSpeedRatings] as? [Int], let iso = isos.first {
-            parts.append("ISO \(iso)")
+            settings.iso = "ISO \(iso)"
         }
 
-        return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
+        return settings
     }
 
     /// 0.004 -> "1/250s", 2.5 -> "2.5s".
@@ -89,21 +89,36 @@ public struct ImageSource {
         return "1/\(Int((1 / seconds).rounded()))s"
     }
 
+    // Fields that identify the photographer or their gear rather than describe the photo. Never exported.
+    private static let identifyingExif: [CFString] = [
+        kCGImagePropertyExifBodySerialNumber, kCGImagePropertyExifLensSerialNumber, kCGImagePropertyExifCameraOwnerName,
+    ]
+    // Written place names, which give the location away as surely as GPS does.
+    private static let iptcLocation: [CFString] = [
+        kCGImagePropertyIPTCCity, kCGImagePropertyIPTCSubLocation, kCGImagePropertyIPTCProvinceState,
+        kCGImagePropertyIPTCCountryPrimaryLocationName, kCGImagePropertyIPTCCountryPrimaryLocationCode,
+    ]
+
     /// The metadata to carry into an export. Orientation is reset because the pixels are already upright.
     public func exportMetadata(stripsLocation: Bool) -> [CFString: Any] {
         var metadata: [CFString: Any] = [kCGImagePropertyOrientation: 1]
 
         var tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         tiff[kCGImagePropertyTIFFOrientation] = 1
+        tiff[kCGImagePropertyTIFFHostComputer] = nil
         metadata[kCGImagePropertyTIFFDictionary] = tiff
 
         if var exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] {
             // The original pixel dimensions no longer describe the framed image.
             exif[kCGImagePropertyExifPixelXDimension] = nil
             exif[kCGImagePropertyExifPixelYDimension] = nil
+            for key in Self.identifyingExif { exif[key] = nil }
             metadata[kCGImagePropertyExifDictionary] = exif
         }
-        if let iptc = properties[kCGImagePropertyIPTCDictionary] {
+        if var iptc = properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any] {
+            if stripsLocation {
+                for key in Self.iptcLocation { iptc[key] = nil }
+            }
             metadata[kCGImagePropertyIPTCDictionary] = iptc
         }
         if !stripsLocation, let gps = properties[kCGImagePropertyGPSDictionary] {

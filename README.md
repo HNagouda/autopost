@@ -28,6 +28,8 @@ In full transparency, Autopost is vibe coded. I described what I wanted and [Cla
 
 - **Every Instagram shape, and your own.** 4:5, 3:4, 1:1, 9:16, 1.91:1, plus wider ones like 3:2 and 16:9. Need something unusual like 32:9? Save it and it sits next to the others.
 - **Borders your way.** Any width, white, warm paper, black or any colour you like, or a soft blurred copy of the photo behind it.
+- **Crop without losing the border.** Click a photo and press C. The crop shapes the photo, and the post's ratio still decides the border around it.
+- **Camera settings you can edit.** Print what each photo was shot with, rename `ILCE-6400` to Sony a6400 once, or type the settings for a film scan.
 - **Text anywhere.** Double-click a photo to add a title, a film stock or a location in any font on your Mac. Text snaps neatly into place, and the next photo's text lands in the same spot, so a whole carousel lines up.
 - **A phone preview.** Swipe through the post the way your followers will, in light and dark mode, and see how it crops on your profile grid.
 - **Exports Instagram won't mangle.** JPEGs at the size and colour space Instagram expects, so it doesn't squash or shift your colours. Your location is removed from the files by default.
@@ -62,10 +64,24 @@ Autopost needs macOS 14 Sonoma or newer, and runs on both Apple Silicon and Inte
 1. **Make a post.** Drag a folder of photos onto the left sidebar. Each folder becomes a post, named after the folder.
 2. **Pick a shape and border** on the right. 4:5 is the safe choice for the feed. 3:4 is a little taller and fills the profile grid tile exactly.
 3. **Fine-tune single photos.** Double-click a photo to give it its own border or position, or to add text (⌘T).
-4. **Check it on the phone preview** (the phone button at the top, or ⌥⌘P).
+4. **Check it on the phone preview** (the phone button above the settings, or ⇧P).
 5. **Export.** Press ⌘E, or right-click the post and pick "Export Post As" to choose a shape and export in one go. "Export and AirDrop" sends the photos straight to your phone.
 
+The first time you open Autopost, a short tour shows the shortcuts. Help > Autopost Tour opens it again.
+
 Your exported photos land in **Pictures → Autopost Exports**, in a folder per post, numbered in carousel order.
+
+## Shortcuts
+
+- **⌘Z** undoes the last change, whether that's a delete, a move, a crop or a border tweak. **⇧⌘Z** redoes it.
+- **⌘N** makes a new post, with its name ready to type.
+- **Delete** removes the selected photos, or the selected post when the sidebar is focused. ⌘⌫ works from anywhere in the main window.
+- **← and →** step through the photos, and **1 to 9** moves the selected photo to that spot in the carousel. Type two digits quickly for 10 and up.
+- **C** crops the selected or open photo. Hold Shift while dragging to keep the shape, then press Return to apply or Esc to cancel.
+- **⇧- and ⇧+** make the grid's photos smaller or larger.
+- **/** hides or shows the filmstrip in the editor.
+- **P** hides or shows the list of posts, and **⇧P** shows or hides the phone preview next to your photos.
+- **⌘T** adds text to the open photo, and **⌘E** exports the post.
 
 A tip for RAW files: Autopost can open them, but it won't see your Lightroom edits. Export your edited photos from Lightroom as JPEG or TIFF first, then drop those into Autopost.
 
