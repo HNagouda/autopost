@@ -260,8 +260,15 @@ struct EmptyLibraryView: View {
 /// macOS 14 and 15 this is empty and the items sit at the left, which is only a difference in looks.
 struct FlexibleToolbarSpace: ToolbarContent {
     var body: some ToolbarContent {
+        // ToolbarSpacer only exists in the macOS 26 SDK, which ships with Swift 6.2. The Intel CI runner still
+        // builds with the macOS 15 SDK, so the check has to happen at compile time as well as at run time. A toolbar
+        // body can't be empty, hence the empty item.
+        #if compiler(>=6.2)
         if #available(macOS 26, *) {
             ToolbarSpacer(.flexible)
         }
+        #else
+        ToolbarItem { EmptyView() }
+        #endif
     }
 }
