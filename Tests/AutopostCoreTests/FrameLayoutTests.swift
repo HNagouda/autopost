@@ -54,11 +54,11 @@ import Testing
 @Test func captionMovesThePhotoUpOnlyAsFarAsItNeeds() {
     var frame = FrameSettings()
     frame.verticalOffset = 1
-    frame.captionSize = 0.05
+    frame.captionSize = 0.1
     let layout = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1000, hasCaption: true)
 
-    // Pushed to the bottom the photo ends at 1150; the 150 band needs it to end at 1100.
-    #expect(abs(layout.imageRect.maxY - 1100) < 0.001)
+    // Pushed to the bottom the photo ends at 1150; the 180 band needs it to end at 1070.
+    #expect(abs(layout.imageRect.maxY - 1070) < 0.001)
     #expect(abs(layout.imageRect.height - 600) < 0.001)
     #expect(abs(layout.captionRect!.maxY - 1250) < 0.001)
 }
@@ -70,7 +70,7 @@ import Testing
     let layout = FrameLayout(imageSize: CGSize(width: 2000, height: 3000), frame: frame, canvasWidth: 1000, hasCaption: true)
 
     #expect(abs(layout.imageRect.minY - 50) < 0.001)
-    #expect(abs(layout.imageRect.height - 800) < 0.001)
+    #expect(abs(layout.imageRect.height - 860) < 0.001)
     #expect(abs(layout.captionRect!.maxY - 1000) < 0.001)
 }
 

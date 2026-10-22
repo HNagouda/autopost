@@ -43,6 +43,7 @@ Libraries saved by 1.1 still open in 1.0, but 1.0 doesn't know about crops or ty
 - Rename a camera once in the post's Caption settings, so `ILCE-6400` prints as Sony a6400 on every photo from it.
 - Open a photo to type over its camera, focal length, aperture, shutter and ISO. Film scans with no camera data get their settings this way, and "Use for All Photos" copies them to the rest of the roll.
 - Adding a caption no longer moves the photo up. The caption goes in the space under the photo, and the photo only moves if that space is too small.
+- The caption sits closer to the photo, less than half as far below it as in 1.0.
 
 ### Typing exact values
 

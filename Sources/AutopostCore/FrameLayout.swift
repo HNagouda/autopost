@@ -4,8 +4,9 @@ import CoreGraphics
 ///
 /// The preview and the exporter both use this, so what the grid shows is exactly what gets written.
 public struct FrameLayout: Equatable, Sendable {
-    // The band kept under the photo for the caption is this many times the caption's font size.
-    public static let captionBandPerFontSize = 3.0
+    // The band kept under the photo for the caption is this many times the caption's font size. The text is centred
+    // in it, so this keeps the gap above the text small enough that the caption reads as part of the photo.
+    public static let captionBandPerFontSize = 1.8
     // A wider border leaves too little room for the photo to be worth showing.
     public static let maxBorderPercent = 30.0
 
