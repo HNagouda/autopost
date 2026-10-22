@@ -9,6 +9,7 @@ struct FeedScreen: View {
     let handle: String
 
     @Environment(LibraryStore.self) private var store
+    @State private var directionLock = ScrollDirectionLock()
 
     var body: some View {
         let posts = store.selectedPost.map { selected in [selected] + store.library.posts.filter { $0.id != selected.id } } ?? []
@@ -33,6 +34,8 @@ struct FeedScreen: View {
             }
             .scrollIndicators(.hidden)
         }
+        .onAppear { directionLock.start() }
+        .onDisappear { directionLock.stop() }
     }
 }
 
@@ -40,13 +43,17 @@ private struct FeedPost: View {
     let post: Post
     let handle: String
 
+    @Environment(LibraryStore.self) private var store
     @Environment(ThumbnailStore.self) private var thumbnails
     @State private var slide: Int? = 0
 
     var body: some View {
         let width = PhonePreviewView.screenSize.width
         // Every slide is cropped to the first one's shape.
-        let firstRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: post.photos[0].url), frame: post.frame(for: post.photos[0]))
+        let first = post.photos[0]
+        let firstRatio = FramedPhotoView.canvasRatio(
+            photo: first, frame: post.frame(for: first), thumbnail: thumbnails.thumbnail(for: first.url), cameraNames: store.library.cameraNames
+        )
         let ratio = min(max(firstRatio, InstagramFeed.tallestRatio), InstagramFeed.widestRatio)
 
         VStack(alignment: .leading, spacing: 0) {
@@ -253,10 +260,13 @@ struct FilledFramedPhoto: View {
     let width: Double
     let ratio: Double
 
+    @Environment(LibraryStore.self) private var store
     @Environment(ThumbnailStore.self) private var thumbnails
 
     var body: some View {
-        let photoRatio = FramedPhotoView.canvasRatio(thumbnails.thumbnail(for: photo.url), frame: frame.applying(photo.adjustments))
+        let photoRatio = FramedPhotoView.canvasRatio(
+            photo: photo, frame: frame.applying(photo.adjustments), thumbnail: thumbnails.thumbnail(for: photo.url), cameraNames: store.library.cameraNames
+        )
         let height = width / ratio
         let size = photoRatio > ratio
             ? CGSize(width: height * photoRatio, height: height)

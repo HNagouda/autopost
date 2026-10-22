@@ -74,7 +74,8 @@ final class InstagramAccount {
             media = try await loadedMedia
             return true
         } catch {
-            NSLog("Autopost: could not load the Instagram account: %@", String(describing: error))
+            // The localized text only: a URLError's full description includes the request URL, token and all.
+            NSLog("Autopost: could not load the Instagram account: %@", error.localizedDescription)
             failureMessage = error.localizedDescription
             return false
         }
@@ -87,7 +88,7 @@ final class InstagramAccount {
             let refreshed = try await InstagramAPI.refreshedToken(token: token)
             try TokenKeychain.save(refreshed.accessToken)
         } catch {
-            NSLog("Autopost: could not refresh the Instagram token, keeping the old one: %@", String(describing: error))
+            NSLog("Autopost: could not refresh the Instagram token, keeping the old one: %@", error.localizedDescription)
         }
     }
 

@@ -14,7 +14,7 @@ final class ThumbnailStore {
 
     struct Thumbnail {
         var image: CGImage
-        var exifLine: String?
+        var exif: CameraSettings
 
         var size: CGSize { CGSize(width: image.width, height: image.height) }
     }
@@ -37,7 +37,7 @@ final class ThumbnailStore {
             guard let source = try? ImageSource(url: url),
                   let image = source.image(maxPixelSize: Self.largeMaxPixelSize, isPreview: false)
             else { return nil }
-            return Thumbnail(image: image, exifLine: source.exifLine)
+            return Thumbnail(image: image, exif: source.cameraSettings)
         }.value
 
         guard let result else { return }
@@ -58,7 +58,7 @@ final class ThumbnailStore {
             guard let source = try? ImageSource(url: url),
                   let image = source.image(maxPixelSize: Self.maxPixelSize, isPreview: true)
             else { return nil }
-            return Thumbnail(image: image, exifLine: source.exifLine)
+            return Thumbnail(image: image, exif: source.cameraSettings)
         }.value
 
         if let result {

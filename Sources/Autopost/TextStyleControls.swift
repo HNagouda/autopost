@@ -42,9 +42,7 @@ struct TextStyleControls<Trailing: View>: View {
 
         LabeledContent("Size") {
             Slider(value: $size, in: Self.sizeRange)
-            Text("\(Int((size * Self.referenceWidth).rounded())) px")
-                .monospacedDigit().frame(width: 48, alignment: .trailing)
-                .help("Size on a 1080 px export")
+            SliderValueField(value: $size, range: Self.sizeRange, scale: Self.referenceWidth, unit: " px", width: 60)
         }
 
         LabeledContent("Style") {

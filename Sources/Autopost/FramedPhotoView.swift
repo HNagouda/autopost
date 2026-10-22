@@ -9,6 +9,7 @@ struct FramedPhotoView: View {
     var isLarge = false
 
     @Environment(ThumbnailStore.self) private var thumbnails
+    @Environment(LibraryStore.self) private var store
 
     init(photo: Photo, frame: FrameSettings, isLarge: Bool = false) {
         self.photo = photo
@@ -22,15 +23,17 @@ struct FramedPhotoView: View {
 
     var body: some View {
         let thumbnail = thumbnails.thumbnail(for: photo.url, isLarge: isLarge)
+        let image = thumbnail.flatMap { $0.image.cropped(to: photo.crop) }
+        let cameraNames = store.library.cameraNames
 
         GeometryReader { geometry in
             let width = geometry.size.width
-            let layout = Self.layout(photo: photo, frame: frame, thumbnail: thumbnail, width: width)
+            let layout = Self.layout(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames, width: width)
 
             ZStack(alignment: .topLeading) {
-                background(thumbnail, layout: layout)
-                photoLayer(thumbnail, layout: layout)
-                let boxes = textBoxes(thumbnail, layout: layout)
+                background(image, layout: layout)
+                photoLayer(image, layout: layout)
+                let boxes = textBoxes(thumbnail, cameraNames: cameraNames, layout: layout)
                 if !boxes.isEmpty {
                     textLayer(boxes, size: layout.canvasSize)
                 }
@@ -38,32 +41,39 @@ struct FramedPhotoView: View {
             .frame(width: width, height: layout.canvasSize.height)
             .clipped()
         }
-        .aspectRatio(Self.canvasRatio(thumbnail, frame: frame), contentMode: .fit)
+        .aspectRatio(Self.canvasRatio(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames), contentMode: .fit)
         .task(id: photo.url) {
             if isLarge { await thumbnails.loadLarge(photo.url) } else { await thumbnails.load(photo.url) }
         }
     }
 
     // Before the thumbnail loads, a 3:2 stand-in keeps the tile from jumping too much.
-    private static func imageSize(_ thumbnail: ThumbnailStore.Thumbnail?) -> CGSize {
-        thumbnail?.size ?? CGSize(width: 3, height: 2)
+    private static func imageSize(_ thumbnail: ThumbnailStore.Thumbnail?, crop: CropRect) -> CGSize {
+        crop.size(of: thumbnail?.size ?? CGSize(width: 3, height: 2))
     }
 
     /// Width over height of the framed canvas.
-    static func canvasRatio(_ thumbnail: ThumbnailStore.Thumbnail?, frame: FrameSettings) -> Double {
-        let unit = layout(frame: frame, thumbnail: thumbnail, width: 1)
+    static func canvasRatio(photo: Photo, frame: FrameSettings, thumbnail: ThumbnailStore.Thumbnail?, cameraNames: [String: String]) -> Double {
+        let unit = layout(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames, width: 1)
         return unit.canvasSize.width / unit.canvasSize.height
     }
 
     /// `frame` must already include the photo's own adjustments.
-    static func layout(photo: Photo? = nil, frame: FrameSettings, thumbnail: ThumbnailStore.Thumbnail?, width: Double) -> FrameLayout {
-        let hasCaption = frame.caption(exifLine: thumbnail?.exifLine) != nil
-        return FrameLayout(imageSize: imageSize(thumbnail), frame: frame, canvasWidth: width, hasCaption: hasCaption)
+    static func layout(photo: Photo, frame: FrameSettings, thumbnail: ThumbnailStore.Thumbnail?, cameraNames: [String: String], width: Double) -> FrameLayout {
+        let hasCaption = caption(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames) != nil
+        return FrameLayout(imageSize: imageSize(thumbnail, crop: photo.crop), frame: frame, canvasWidth: width, hasCaption: hasCaption)
+    }
+
+    /// The caption text, from the EXIF and what the user typed over it, as the exporter prints it.
+    static func caption(photo: Photo, frame: FrameSettings, thumbnail: ThumbnailStore.Thumbnail?, cameraNames: [String: String]) -> String? {
+        let settings = photo.cameraSettings(exif: thumbnail?.exif ?? CameraSettings(), cameraNames: cameraNames)
+        return frame.caption(exifLine: settings.line)
     }
 
     /// The caption, when there is one, followed by the photo's own text boxes, as the exporter draws them.
-    private func textBoxes(_ thumbnail: ThumbnailStore.Thumbnail?, layout: FrameLayout) -> [TextBox] {
-        let caption = frame.caption(exifLine: thumbnail?.exifLine).flatMap { frame.captionBox($0, in: layout) }
+    private func textBoxes(_ thumbnail: ThumbnailStore.Thumbnail?, cameraNames: [String: String], layout: FrameLayout) -> [TextBox] {
+        let caption = Self.caption(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames)
+            .flatMap { frame.captionBox($0, in: layout) }
         return (caption.map { [$0] } ?? []) + photo.textBoxes
     }
 
@@ -86,9 +96,9 @@ struct FramedPhotoView: View {
     }
 
     @ViewBuilder
-    private func background(_ thumbnail: ThumbnailStore.Thumbnail?, layout: FrameLayout) -> some View {
-        if frame.background == .blur, let thumbnail {
-            Image(decorative: thumbnail.image, scale: 1)
+    private func background(_ image: CGImage?, layout: FrameLayout) -> some View {
+        if frame.background == .blur, let image {
+            Image(decorative: image, scale: 1)
                 .resizable()
                 .scaledToFill()
                 .frame(width: layout.canvasSize.width, height: layout.canvasSize.height)
@@ -100,12 +110,12 @@ struct FramedPhotoView: View {
     }
 
     @ViewBuilder
-    private func photoLayer(_ thumbnail: ThumbnailStore.Thumbnail?, layout: FrameLayout) -> some View {
+    private func photoLayer(_ image: CGImage?, layout: FrameLayout) -> some View {
         let rect = layout.imageRect
         let width = layout.canvasSize.width
         Group {
-            if let thumbnail {
-                Image(decorative: thumbnail.image, scale: 1)
+            if let image {
+                Image(decorative: image, scale: 1)
                     .resizable()
                     .interpolation(.high)
             } else if thumbnails.missing.contains(photo.url) {
