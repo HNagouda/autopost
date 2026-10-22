@@ -6,6 +6,7 @@ struct InspectorView: View {
     let postID: Post.ID
 
     @Environment(LibraryStore.self) private var store
+    @Environment(ThumbnailStore.self) private var thumbnails
     @AppStorage(AppTheme.storageKey) private var theme = AppTheme.system
     @State private var isNamingPreset = false
     @State private var presetName = ""
@@ -42,8 +43,7 @@ struct InspectorView: View {
             Section("Border") {
                 LabeledContent("Size") {
                     Slider(value: frame.borderPercent, in: 0...FrameLayout.maxBorderPercent)
-                    Text("\(frame.wrappedValue.borderPercent, format: .number.precision(.fractionLength(1)))%")
-                        .monospacedDigit().frame(width: 44, alignment: .trailing)
+                    SliderValueField(value: frame.borderPercent, range: 0...FrameLayout.maxBorderPercent, fractionDigits: 1, unit: "%", width: 52)
                 }
                 LabeledContent("Position") {
                     Slider(value: frame.verticalOffset, in: -1...1) {
@@ -82,6 +82,9 @@ struct InspectorView: View {
                     // A bare title becomes the row's label in a grouped form, so the hint goes in the prompt.
                     TextField("Caption", text: frame.captionText, prompt: Text("Kodak Gold 200 · Monterey"))
                 }
+                if frame.wrappedValue.captionMode == .exif {
+                    cameraNameFields()
+                }
                 if frame.wrappedValue.captionMode != .off {
                     TextStyleControls(
                         fontFamily: frame.captionFontFamily, size: frame.captionSize,
@@ -118,6 +121,24 @@ struct InspectorView: View {
                 if !presetName.isEmpty { store.savePreset(named: presetName, frame: frame.wrappedValue) }
             }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// One row per camera in this post, to print a friendlier name than the EXIF model. Names apply to every post.
+    @ViewBuilder
+    private func cameraNameFields() -> some View {
+        let photos = store.post(postID)?.photos ?? []
+        let models = Set(photos.compactMap { thumbnails.thumbnail(for: $0.url)?.exif.camera }).sorted()
+
+        ForEach(models, id: \.self) { model in
+            TextField(model, text: Binding(
+                get: { store.library.cameraNames[model] ?? "" },
+                set: { name in store.library.cameraNames[model] = name.isEmpty ? nil : name }
+            ), prompt: Text(model))
+        }
+        if !models.isEmpty {
+            Text("Rename a camera once and every photo from it prints the new name. Open a photo to change its own settings.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

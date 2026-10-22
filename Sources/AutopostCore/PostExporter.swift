@@ -27,7 +27,7 @@ public enum PostExporter {
     }
 
     public static func export(
-        _ post: Post, settings: ExportSettings, progress: @escaping @Sendable (Int) -> Void
+        _ post: Post, settings: ExportSettings, cameraNames: [String: String], progress: @escaping @Sendable (Int) -> Void
     ) async throws -> [URL] {
         let folder = folder(for: post, settings: settings)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -43,13 +43,13 @@ public enum PostExporter {
             var pending = jobs[...]
             for _ in 0..<min(parallelPhotos, pending.count) {
                 let (photo, target) = pending.removeFirst()
-                group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings) }
+                group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
             }
             for try await _ in group {
                 finished += 1
                 progress(finished)
                 if let (photo, target) = pending.popFirst() {
-                    group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings) }
+                    group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
                 }
             }
         }
@@ -57,15 +57,21 @@ public enum PostExporter {
         return jobs.map(\.1)
     }
 
-    public static func exportPhoto(_ photo: Photo, to target: URL, frame: FrameSettings, settings: ExportSettings) throws {
+    public static func exportPhoto(
+        _ photo: Photo, to target: URL, frame: FrameSettings, settings: ExportSettings, cameraNames: [String: String]
+    ) throws {
         let url = photo.url
         let source = try ImageSource(url: url)
-        let caption = frame.caption(exifLine: source.exifLine)
-        let width = canvasWidth(for: source.pixelSize, frame: frame, size: settings.size, hasCaption: caption != nil)
+        let caption = frame.caption(exifLine: photo.cameraSettings(exif: source.cameraSettings, cameraNames: cameraNames).line)
+        let croppedSize = photo.crop.size(of: source.pixelSize)
+        let width = canvasWidth(for: croppedSize, frame: frame, size: settings.size, hasCaption: caption != nil)
 
-        let planned = FrameLayout(imageSize: source.pixelSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
-        let longEdge = Int(max(planned.imageRect.width, planned.imageRect.height).rounded(.up))
-        guard let image = source.image(maxPixelSize: longEdge) else { throw ImageSourceError.unreadable(url) }
+        // Decode the whole photo at the scale the kept part needs on the canvas, then cut the crop out of it.
+        let planned = FrameLayout(imageSize: croppedSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
+        let scale = planned.imageRect.width / max(croppedSize.width, 1)
+        let longEdge = Int((max(source.pixelSize.width, source.pixelSize.height) * scale).rounded(.up))
+        guard let decoded = source.image(maxPixelSize: longEdge), let image = decoded.cropped(to: photo.crop)
+        else { throw ImageSourceError.unreadable(url) }
 
         // RAW files can report a slightly different size than they decode to; lay out on the real pixels.
         let decodedSize = CGSize(width: image.width, height: image.height)
@@ -110,8 +116,11 @@ public enum PostExporter {
         return words.isEmpty ? "post" : words.joined(separator: "-")
     }
 
+    /// "Trip/1" -> "Trip-1", ".." -> "Post".
     static func safeFileName(_ name: String) -> String {
         let cleaned = name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        return cleaned.trimmingCharacters(in: .whitespaces).isEmpty ? "Post" : cleaned
+        // Leading dots would hide the folder, and a name of only dots would point outside the export folder.
+        let visible = String(cleaned.drop { $0 == "." }).trimmingCharacters(in: .whitespaces)
+        return visible.isEmpty ? "Post" : visible
     }
 }

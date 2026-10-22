@@ -2,7 +2,7 @@ import AppKit
 import AutopostCore
 import Foundation
 
-/// Per-photo changes: the photo's own border and position, and its text boxes.
+/// Per-photo changes: the photo's own border and position, its camera settings, and its text boxes.
 extension LibraryStore {
     // Pasteboard type for a copied text box. Plain text goes alongside, so pasting into other apps gives the words.
     static let textBoxPasteboardType = NSPasteboard.PasteboardType("\(AppIdentity.bundleID).textbox")
@@ -16,6 +16,15 @@ extension LibraryStore {
             guard let index = post.photos.firstIndex(where: { $0.id == photoID }) else { return }
             change(&post.photos[index])
         }
+    }
+
+    /// Gives every photo in the post the camera settings typed for this one, for a film roll shot on one camera.
+    func copyCameraSettingsToAllPhotos(from photoID: Photo.ID, in postID: Post.ID) {
+        guard let settings = photo(photoID, in: postID)?.cameraOverrides else { return }
+        update(postID) { post in
+            for index in post.photos.indices { post.photos[index].cameraOverrides = settings }
+        }
+        toast = Toast(message: "Camera settings copied to every photo", systemImage: "camera")
     }
 
     /// A new box copies the last one placed, so repeated text lands in the same spot on the next photo.

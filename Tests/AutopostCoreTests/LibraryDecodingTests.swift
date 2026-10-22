@@ -33,6 +33,9 @@ private let firstVersionLibrary = """
     #expect(library.posts[0].photos[0].textBoxes.isEmpty)
     #expect(library.savedRatios.isEmpty)
     #expect(library.deletedPosts.isEmpty)
+    #expect(library.posts[0].photos[0].crop == .full)
+    #expect(library.posts[0].photos[0].cameraOverrides.isEmpty)
+    #expect(library.cameraNames.isEmpty)
 }
 
 @Test func libraryRoundTripsTextBoxes() throws {
@@ -49,4 +52,30 @@ private let firstVersionLibrary = """
     let decoded = try JSONDecoder().decode(Library.self, from: JSONEncoder().encode(library))
 
     #expect(decoded.posts[0].photos[0].textBoxes == [box])
+}
+
+@Test func libraryRoundTripsCropAndCameraSettings() throws {
+    var library = Library()
+    var post = Post(name: "Roll 12", frame: FrameSettings())
+    var photo = Photo(url: URL(fileURLWithPath: "/tmp/scan.tif"))
+    photo.crop = CropRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
+    photo.cameraOverrides = CameraSettings(camera: "Pentax K1000", iso: "Portra 400")
+    post.photos = [photo]
+    library.posts = [post]
+    library.cameraNames = ["ILCE-6400": "Sony a6400"]
+
+    let decoded = try JSONDecoder().decode(Library.self, from: JSONEncoder().encode(library))
+
+    #expect(decoded == library)
+}
+
+@Test func cropOutsideThePhotoIsDroppedWhenLoading() throws {
+    let json = """
+    {"id": "2D0F6C2E-1D1B-4C55-9C51-0B3F4C1E2A10", "url": "file:///tmp/a.jpg",
+     "crop": {"x": 0.8, "y": 0, "width": 0.5, "height": 0}}
+    """
+
+    let photo = try JSONDecoder().decode(Photo.self, from: Data(json.utf8))
+
+    #expect(photo.crop == .full)
 }

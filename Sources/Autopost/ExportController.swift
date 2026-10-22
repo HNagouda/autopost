@@ -21,12 +21,13 @@ final class ExportController {
         guard let post = store.post(id), !post.photos.isEmpty, !isExporting(id) else { return }
 
         let settings = store.library.export
+        let cameraNames = store.library.cameraNames
         let total = Double(post.photos.count)
         progress[id] = 0
 
         Task {
             do {
-                let files = try await PostExporter.export(post, settings: settings) { done in
+                let files = try await PostExporter.export(post, settings: settings, cameraNames: cameraNames) { done in
                     Task { @MainActor in
                         // A late update must not bring back a finished export.
                         if self.progress[id] != nil { self.progress[id] = Double(done) / total }

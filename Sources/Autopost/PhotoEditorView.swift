@@ -10,17 +10,6 @@ struct PhotoEditorView: View {
     private static let nudgeStep = 0.002
     private static let canvasPadding = 40.0
 
-    // Hardware key codes, which stay the same on every keyboard layout.
-    private enum KeyCode {
-        static let delete: UInt16 = 51
-        static let forwardDelete: UInt16 = 117
-        static let escape: UInt16 = 53
-        static let left: UInt16 = 123
-        static let right: UInt16 = 124
-        static let down: UInt16 = 125
-        static let up: UInt16 = 126
-    }
-
     @Environment(LibraryStore.self) private var store
     @Environment(EditorSession.self) private var editor
     @Environment(ThumbnailStore.self) private var thumbnails
@@ -33,11 +22,19 @@ struct PhotoEditorView: View {
 
         VStack(spacing: 0) {
             if let post, let photo {
-                canvas(photo: photo, post: post)
-                Divider()
-                Filmstrip(post: post)
+                if editor.isCropping {
+                    CropView(postID: postID, photo: photo)
+                } else {
+                    canvas(photo: photo, post: post)
+                }
+                FilmstripToggle()
+                if editor.isFilmstripShown {
+                    Filmstrip(post: post)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
+        .animation(.easeOut(duration: 0.2), value: editor.isFilmstripShown)
         .background(theme.canvasBackground)
         .onAppear { startKeyMonitor() }
         .onDisappear { stopKeyMonitor() }
@@ -51,13 +48,14 @@ struct PhotoEditorView: View {
         GeometryReader { geometry in
             let frame = post.frame(for: photo)
             let thumbnail = thumbnails.thumbnail(for: photo.url, isLarge: true)
-            let ratio = FramedPhotoView.canvasRatio(thumbnail, frame: frame)
+            let cameraNames = store.library.cameraNames
+            let ratio = FramedPhotoView.canvasRatio(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames)
             let available = CGSize(
                 width: geometry.size.width - 2 * Self.canvasPadding,
                 height: geometry.size.height - 2 * Self.canvasPadding
             )
             let width = max(min(available.width, available.height * ratio), 1)
-            let layout = FramedPhotoView.layout(frame: frame, thumbnail: thumbnail, width: width)
+            let layout = FramedPhotoView.layout(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames, width: width)
 
             FramedPhotoView(photo: photo, frame: post.frame, isLarge: true)
                 .frame(width: width, height: width / ratio)
@@ -79,6 +77,7 @@ struct PhotoEditorView: View {
     private func canvasMenu(photo: Photo) -> some View {
         Button("Add Text Box") { editor.addTextBox(in: store, postID: postID) }
         Button("Paste") { editor.paste(in: store, postID: postID) }
+        Button("Crop Photo") { editor.crop(photo.id, in: store, postID: postID) }
         Divider()
         Toggle("Show Grid", isOn: Binding(get: { editor.isShowingGrid }, set: { editor.isShowingGrid = $0 }))
     }
@@ -89,22 +88,17 @@ struct PhotoEditorView: View {
     }
 
     // * ====================================================================
-    // * === actions
-    // * ====================================================================
-
-    // * ====================================================================
     // * === keyboard
     // * ====================================================================
 
     /// Watches key presses in the editor window directly. SwiftUI's key handlers only fire while the canvas
     /// holds focus, and clicking a text box does not reliably give it focus.
     private func startKeyMonitor() {
-        let window = NSApp.keyWindow
         let store = store
         let editor = editor
         let postID = postID
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.window === window else { return event }
+            guard WindowID.isMain(event.window) else { return event }
             return Self.handleKey(event, store: store, editor: editor, postID: postID) ? nil : event
         }
     }
@@ -116,22 +110,64 @@ struct PhotoEditorView: View {
 
     /// True when the key was used. Typing in a text field and shortcuts with ⌘, ⌥ or ⌃ pass through untouched.
     private static func handleKey(_ event: NSEvent, store: LibraryStore, editor: EditorSession, postID: Post.ID) -> Bool {
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control])
-        guard modifiers.isEmpty, !(event.window?.firstResponder is NSText) else { return false }
+        guard KeyCode.hasNoShortcutModifiers(event), !KeyCode.isTyping(in: event.window) else { return false }
+        if event.charactersIgnoringModifiers == "/" {
+            editor.isFilmstripShown.toggle()
+            return true
+        }
+        if editor.isCropping { return cropKey(event, store: store, editor: editor, postID: postID) }
 
-        switch event.keyCode {
-        case KeyCode.delete, KeyCode.forwardDelete:
-            guard editor.selectedTextBoxID != nil else { return false }
+        if KeyCode.isDelete(event.keyCode) {
+            // A plain Delete only removes a selected text box. Removing the photo itself takes ⌘⌫, so a stray key
+            // press can't, and a held key never repeats a delete.
+            guard editor.selectedTextBoxID != nil, !event.isARepeat else { return false }
             editor.deleteSelectedBox(in: store, postID: postID)
             return true
-        case KeyCode.escape:
+        }
+        if KeyCode.isArrow(event.keyCode) {
+            return arrowKey(event.keyCode, isShifted: event.modifierFlags.contains(.shift), store: store, editor: editor, postID: postID)
+        }
+        if event.keyCode == KeyCode.escape {
             if editor.selectedTextBoxID != nil { editor.select(nil) } else { editor.close() }
             return true
-        case KeyCode.left, KeyCode.right, KeyCode.up, KeyCode.down:
-            return arrowKey(event.keyCode, isShifted: event.modifierFlags.contains(.shift), store: store, editor: editor, postID: postID)
+        }
+
+        if let digit = KeyCode.digit(event.keyCode) {
+            guard let photoID = editor.photoID, let count = store.post(postID)?.photos.count,
+                  let position = editor.typedPosition.type(digit, photoCount: count)
+            else { return false }
+            store.movePhoto(photoID, in: postID, toPosition: position)
+            return true
+        }
+
+        switch event.charactersIgnoringModifiers {
+        case "c":
+            guard let photoID = editor.photoID else { return false }
+            editor.crop(photoID, in: store, postID: postID)
+            return true
         default:
             return false
         }
+    }
+
+    /// While cropping, Return or C applies, Escape cancels, and other editor keys are held back.
+    private static func cropKey(_ event: NSEvent, store: LibraryStore, editor: EditorSession, postID: Post.ID) -> Bool {
+        switch event.keyCode {
+        case KeyCode.returnKey, KeyCode.keypadEnter:
+            editor.applyCrop(in: store, postID: postID)
+            return true
+        case KeyCode.escape:
+            editor.cancelCrop()
+            return true
+        default:
+            break
+        }
+
+        if event.charactersIgnoringModifiers == "c" {
+            editor.applyCrop(in: store, postID: postID)
+            return true
+        }
+        return KeyCode.isDelete(event.keyCode) || KeyCode.isArrow(event.keyCode)
     }
 
     /// Nudges the selected box, or steps through the post when nothing is selected.
@@ -159,6 +195,33 @@ struct PhotoEditorView: View {
     }
 }
 
+/// The thin bar above the filmstrip with a chevron that hides or shows it, like a folder's disclosure arrow in Finder.
+private struct FilmstripToggle: View {
+    @Environment(EditorSession.self) private var editor
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Button {
+                editor.isFilmstripShown.toggle()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .rotationEffect(.degrees(editor.isFilmstripShown ? 0 : 180))
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 28, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(editor.isFilmstripShown ? "Hide the filmstrip (/)" : "Show the filmstrip (/)")
+            .accessibilityLabel(editor.isFilmstripShown ? "Hide filmstrip" : "Show filmstrip")
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 22)
+        .overlay(alignment: .top) { Divider() }
+    }
+}
+
 private struct Filmstrip: View {
     let post: Post
 
@@ -183,6 +246,8 @@ private struct Filmstrip: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                // The open photo slides to its new place when the number keys move it.
+                .animation(PostGridView.reorderAnimation, value: post.photos.map(\.id))
             }
             .frame(height: Self.height)
             .onChange(of: editor.photoID) {

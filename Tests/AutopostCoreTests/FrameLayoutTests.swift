@@ -42,12 +42,36 @@ import Testing
     #expect(abs(layout.imageRect.minY - 50) < 0.001)
 }
 
-@Test func captionReservesBandUnderPhoto() {
+@Test func addingACaptionDoesNotMoveThePhotoWhenItFitsUnderIt() {
+    let photo = CGSize(width: 3000, height: 2000)
+    let plain = FrameLayout(imageSize: photo, frame: FrameSettings(), canvasWidth: 1000)
+    let captioned = FrameLayout(imageSize: photo, frame: FrameSettings(), canvasWidth: 1000, hasCaption: true)
+
+    #expect(captioned.imageRect == plain.imageRect)
+    #expect(abs(captioned.captionRect!.minY - plain.imageRect.maxY) < 0.001)
+}
+
+@Test func captionMovesThePhotoUpOnlyAsFarAsItNeeds() {
+    var frame = FrameSettings()
+    frame.verticalOffset = 1
+    frame.captionSize = 0.1
+    let layout = FrameLayout(imageSize: CGSize(width: 3000, height: 2000), frame: frame, canvasWidth: 1000, hasCaption: true)
+
+    // Pushed to the bottom the photo ends at 1150; the 180 band needs it to end at 1070.
+    #expect(abs(layout.imageRect.maxY - 1070) < 0.001)
+    #expect(abs(layout.imageRect.height - 600) < 0.001)
+    #expect(abs(layout.captionRect!.maxY - 1250) < 0.001)
+}
+
+@Test func captionShrinksThePhotoOnlyOnceItReachesTheTopBorder() {
     var frame = FrameSettings()
     frame.ratio = .square
+    frame.captionSize = 0.05
     let layout = FrameLayout(imageSize: CGSize(width: 2000, height: 3000), frame: frame, canvasWidth: 1000, hasCaption: true)
 
-    #expect(abs(layout.captionRect!.maxY - 950) < 0.001)
+    #expect(abs(layout.imageRect.minY - 50) < 0.001)
+    #expect(abs(layout.imageRect.height - 860) < 0.001)
+    #expect(abs(layout.captionRect!.maxY - 1000) < 0.001)
 }
 
 @Test func fullResolutionKeepsPhotoAtNativeWidth() {

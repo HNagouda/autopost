@@ -18,20 +18,18 @@ struct AutopostApp: App {
                 .environment(thumbnails)
                 .environment(exporter)
                 .environment(editor)
+                .environment(instagram)
                 .onAppear { theme.apply() }
                 .onChange(of: theme) { theme.apply() }
         }
         .defaultSize(width: 1280, height: 820)
         .commands { AutopostCommands(store: store, exporter: exporter, editor: editor) }
 
-        Window("Phone Preview", id: WindowID.phone) {
-            PhonePreviewView()
-                .environment(store)
-                .environment(thumbnails)
-                .environment(instagram)
+        Window("Autopost Tour", id: WindowID.tour) {
+            TourView()
         }
-        .defaultSize(width: 460, height: 900)
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
 
         Window("Backups", id: WindowID.backups) {
             BackupsView()
@@ -48,8 +46,14 @@ struct AutopostApp: App {
 
 enum WindowID {
     static let main = "main"
-    static let phone = "phone"
     static let backups = "backups"
+    static let tour = "tour"
+
+    /// SwiftUI gives a scene's window the scene's id as its identifier, so "main" finds the main window.
+    @MainActor
+    static func isMain(_ window: NSWindow?) -> Bool {
+        window?.identifier?.rawValue == main
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
