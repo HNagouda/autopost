@@ -47,6 +47,9 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
     public var url: URL
     public var adjustments = PhotoAdjustments()
     public var textBoxes: [TextBox] = []
+    public var crop = CropRect.full
+    // Camera settings typed over the EXIF for this photo, or for a film scan that has none.
+    public var cameraOverrides = CameraSettings()
 
     public init(url: URL) {
         self.url = url
@@ -58,18 +61,25 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
         url = try container.decode(URL.self, forKey: .url)
         adjustments = try container.decode(.adjustments, default: PhotoAdjustments())
         textBoxes = try container.decode(.textBoxes, default: [])
+        // A hand-edited or damaged file must not turn into a zero or NaN layout, so a crop that is not a valid part
+        // of the photo is dropped.
+        let decodedCrop = try container.decode(.crop, default: CropRect.full)
+        crop = decodedCrop.isValid ? decodedCrop : .full
+        cameraOverrides = try container.decode(.cameraOverrides, default: CameraSettings())
     }
 
-    /// The same photo, border and text as a new entry, for duplicating a post.
+    /// The same photo, border, crop and text as a new entry, for duplicating a post.
     public func duplicated() -> Photo {
         var copy = Photo(url: url)
         copy.adjustments = adjustments
+        copy.crop = crop
+        copy.cameraOverrides = cameraOverrides
         copy.textBoxes = textBoxes.map { $0.duplicated() }
         return copy
     }
 }
 
-public struct Post: Codable, Identifiable, Sendable {
+public struct Post: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var name: String
     public var photos: [Photo] = []
@@ -87,7 +97,7 @@ public struct Post: Codable, Identifiable, Sendable {
     }
 }
 
-public struct FramePreset: Codable, Identifiable, Sendable {
+public struct FramePreset: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var name: String
     public var frame: FrameSettings
@@ -99,7 +109,7 @@ public struct FramePreset: Codable, Identifiable, Sendable {
 }
 
 /// A deleted post, kept so it can be restored from Recently Deleted.
-public struct DeletedPost: Codable, Identifiable, Sendable {
+public struct DeletedPost: Codable, Identifiable, Equatable, Sendable {
     public var post: Post
     public var deletedAt: Date
 
@@ -111,7 +121,7 @@ public struct DeletedPost: Codable, Identifiable, Sendable {
     public var id: Post.ID { post.id }
 }
 
-public struct Library: Codable, Sendable {
+public struct Library: Codable, Equatable, Sendable {
     public var posts: [Post] = []
     public var defaultFrame = FrameSettings()
     public var export = ExportSettings()
@@ -120,6 +130,8 @@ public struct Library: Codable, Sendable {
     // The last text box placed or edited; a new box starts as a copy of it, in the same spot.
     public var textBoxTemplate: TextBox?
     public var deletedPosts: [DeletedPost] = []
+    // The names to print for camera models, keyed by the model in the EXIF: "ILCE-6400" to "Sony a6400".
+    public var cameraNames: [String: String] = [:]
 
     public init() {}
 
@@ -132,5 +144,6 @@ public struct Library: Codable, Sendable {
         savedRatios = try container.decode(.savedRatios, default: [])
         textBoxTemplate = try container.decodeIfPresent(TextBox.self, forKey: .textBoxTemplate)
         deletedPosts = try container.decode(.deletedPosts, default: [])
+        cameraNames = try container.decode(.cameraNames, default: [:])
     }
 }
