@@ -5,6 +5,10 @@ on:
     branches: [main, dev]
   pull_request:
 
+# Pull requests from forks get a read-only token anyway; this keeps it that way for every run.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-26
@@ -33,6 +37,9 @@ jobs:
     steps:
       - name: Check the pull request comes from dev
         if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'dev'
+        # Through an environment variable, so a branch name full of shell syntax is printed, never run.
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          echo "Pull requests into main must come from dev, this one comes from ${{ github.head_ref }}."
+          echo "Pull requests into main must come from dev, this one comes from $HEAD_REF."
           exit 1
