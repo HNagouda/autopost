@@ -15,18 +15,29 @@ struct PhotoInspector: View {
     var body: some View {
         if let post = store.post(postID), let photo = store.photo(photoID, in: postID) {
             Form {
-                adjustments(photo: photo, post: post)
-                cameraSettings(photo: photo, post: post)
+                // A canvas has no border or caption of its own: its photos are placed by hand.
+                if photo.isCanvas {
+                    CanvasInspectorSection(postID: postID, photo: photo)
+                } else {
+                    adjustments(photo: photo, post: post)
+                    cameraSettings(photo: photo, post: post)
+                }
                 textBoxes(photo: photo)
                 if let boxID = editor.selectedTextBoxID, let box = photo.textBoxes.first(where: { $0.id == boxID }) {
                     TextBoxInspector(postID: postID, photoID: photoID, box: box)
                 }
                 // Last, as in Lightroom's Metadata panel: reference, not a setting.
-                PhotoInfoSection(photo: photo)
+                PhotoInfoSection(photo: infoPhoto(of: photo))
             }
             .formStyle(.grouped)
             .amoledBackground(theme)
         }
+    }
+
+    /// The photo the Info section describes: the selected one on a canvas, or else the open photo.
+    private func infoPhoto(of photo: Photo) -> Photo {
+        guard photo.isCanvas, let index = editor.selectedImageIndex, photo.images.indices.contains(index) else { return photo }
+        return photo.images[index]
     }
 
     private func adjustments(photo: Photo, post: Post) -> some View {

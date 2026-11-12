@@ -57,6 +57,12 @@ struct CropView: View {
     private static let handleSize = 12.0
     private static let handleHitSize = 28.0
     private static let shadeOpacity = 0.6
+    // The slide width a place's shape is measured at. FrameLayout never makes a photo less than 1 unit high, so at
+    // a slide width of 1 a third of a slide came out as 1 high and the shape as nearly square.
+    private static let shapeSlideWidth = 1000.0
+    // A crop shape is written as whole numbers like 8:5 when it is this close to such a ratio, else as 1.64:1.
+    private static let largestRatioTerm = 10
+    private static let ratioTolerance = 0.005
 
     @Environment(LibraryStore.self) private var store
     @Environment(EditorSession.self) private var editor
@@ -122,12 +128,13 @@ struct CropView: View {
     /// The shape of the open photo's place in its stack or panorama, which the crop must keep, or nil when it may be any shape.
     /// With the original ratio the photo keeps its own shape, so its crop stays free there too.
     private func filledShape() -> Double? {
-        guard photo.isStack || photo.slideCount > 1, let post = store.post(postID) else { return nil }
+        guard photo.isStack || photo.isCanvas || photo.slideCount > 1, let post = store.post(postID) else { return nil }
         let frame = post.frame(for: photo)
-        guard frame.ratioValue != nil else { return nil }
+        // A box on a canvas has its own shape whatever the ratio.
+        guard frame.ratioValue != nil || photo.isCanvas else { return nil }
 
         let loaded = FramedPhotoView.loadedThumbnails(for: photo, in: thumbnails)
-        let layout = FramedPhotoView.layout(photo: photo, frame: frame, thumbnails: loaded, cameraNames: store.library.cameraNames, slideWidth: 1)
+        let layout = FramedPhotoView.layout(photo: photo, frame: frame, thumbnails: loaded, cameraNames: store.cameraNames, slideWidth: Self.shapeSlideWidth)
         guard layout.imageRects.indices.contains(editor.cropImageIndex) else { return nil }
         let rect = layout.imageRects[editor.cropImageIndex]
         return rect.width / max(rect.height, 0.000_001)
@@ -232,14 +239,12 @@ struct CropView: View {
                 Text("Shift keeps the shape · Return applies · Esc cancels")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
-                // The crop has to keep the shape of its place on the slides, so the slides' ratio is what can change.
-                Picker("Slides", selection: store.frameBinding(for: postID).ratio) {
-                    ForEach(AspectRatio.allCases.filter { $0 != .custom || frame.ratio == .custom }) { Text($0.label).tag($0) }
-                }
-                .fixedSize()
-                .help("The aspect ratio of every slide in this post, which sets the shape of this crop")
-                Text("\(photo.isStack ? "The stack" : "The split photo") sets the shape · Return applies · Esc cancels")
+            } else if let lockedShape {
+                // The crop has to keep the shape of its place, so the bar shows that shape and what sets it, with
+                // nothing to pick. The slides' own ratio is changed in the sidebar, as for every other photo.
+                Label("Crop locked to \(Self.shapeLabel(lockedShape))", systemImage: "lock.fill")
+                    .help("The crop keeps the shape of this photo's place, which is worked out from the slide ratio, the border and the layout")
+                Text("\(lockReason(slideRatio: frame.ratio.label)) · Return applies · Esc cancels")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -258,6 +263,23 @@ struct CropView: View {
         .padding(.vertical, 10)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// What fixes the crop's shape, in a few words for the crop bar.
+    private func lockReason(slideRatio: String) -> String {
+        if photo.isCanvas { return "Set by its box on the canvas" }
+        if photo.isStack { return "Set by \(photo.images.count) photos sharing a \(slideRatio) slide" }
+        return "Set by the \(photo.slideCount) slides of \(slideRatio) it fills"
+    }
+
+    /// 1.6 -> "8:5", 1.64 -> "1.64:1".
+    private static func shapeLabel(_ shape: Double) -> String {
+        for height in 1...largestRatioTerm {
+            let width = (shape * Double(height)).rounded()
+            if width >= 1, abs(width / Double(height) - shape) < shape * ratioTolerance { return "\(Int(width)):\(height)" }
+        }
+
+        return String(format: "%.2f:1", shape)
     }
 
     /// "Top", "Middle", "Bottom" for a stack of three; "Top", "Bottom" for two.

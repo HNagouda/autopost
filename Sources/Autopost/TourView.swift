@@ -141,6 +141,16 @@ private struct TourPage {
             ]
         ),
         TourPage(
+            symbol: "rectangle.3.group",
+            title: "Canvas",
+            text: "Click Canvas in the toolbar and pick photos to place them freely across a run of slides. Drag a photo to move it and its handles to resize it; it can cross from one slide into the next. Arrange in the sidebar offers ready-made designs, with photos as backgrounds and bordered prints across the seams.",
+            keys: [
+                KeyHint(key: "Shift", meaning: "Hold while dragging to place freely, without snapping"),
+                KeyHint(key: "C", meaning: "Choose which part of the selected photo shows"),
+                KeyHint(key: "Delete", meaning: "Take the selected photo off the canvas"),
+            ]
+        ),
+        TourPage(
             symbol: "square.stack",
             title: "Panoramas and stacks",
             text: "Select a wide photo and pick Split in the bar below the grid to spread it across 2 or 3 slides, so it scrolls past as one picture. Click Stack in the toolbar and pick two or three landscape photos to put them on one slide; each is cropped to fill its place.",

@@ -2,7 +2,9 @@ import AutopostCore
 import SwiftUI
 
 /// A photo on its frame, laid out by the same FrameLayout the exporter uses, so the preview is the export.
-struct FramedPhotoView: View {
+///
+/// Equatable, so SwiftUI skips a photo whose own settings did not change when another photo is edited.
+struct FramedPhotoView: View, Equatable {
     let photo: Photo
     // The post's frame. The photo's own border and position are applied on top here, as the exporter does.
     let postFrame: FrameSettings
@@ -20,23 +22,44 @@ struct FramedPhotoView: View {
         self.showsSeams = showsSeams
     }
 
+    nonisolated static func == (a: FramedPhotoView, b: FramedPhotoView) -> Bool {
+        a.photo == b.photo && a.postFrame == b.postFrame && a.isLarge == b.isLarge && a.showsSeams == b.showsSeams
+    }
+
     private var frame: FrameSettings {
         postFrame.applying(photo.adjustments)
     }
 
     var body: some View {
         let loaded = Self.loadedThumbnails(for: photo, in: thumbnails, isLarge: isLarge)
-        let images = zip(photo.images, loaded).map { image, thumbnail in thumbnail.flatMap { $0.image.cropped(to: image.crop) } }
-        let cameraNames = store.library.cameraNames
+        let images = photo.images.map { thumbnails.croppedImage(for: $0.url, crop: $0.crop, isLarge: isLarge) }
+        let cameraNames = store.cameraNames
 
         GeometryReader { geometry in
             let width = geometry.size.width
             let layout = Self.layout(photo: photo, frame: frame, thumbnails: loaded, cameraNames: cameraNames, slideWidth: width / Double(photo.slideCount))
+            // The shadow is sized by one slide, as text is, so it is no larger on a canvas of many slides.
+            let slideWidth = layout.canvasSize.width / Double(max(layout.slideCount, 1))
 
             ZStack(alignment: .topLeading) {
                 background(images.first ?? nil, layout: layout)
                 ForEach(Array(photo.images.enumerated()), id: \.element.id) { index, image in
-                    photoLayer(images[index], url: image.url, rect: layout.imageRects[index], canvasWidth: layout.canvasSize.width)
+                    // A photo of a canvas with a border sits on a mat in the frame colour, which carries the shadow.
+                    let mat = layout.matRects.indices.contains(index) && layout.matRects[index] != layout.imageRects[index] ? layout.matRects[index] : nil
+                    if let mat {
+                        frameColor
+                            .frame(width: mat.width, height: mat.height)
+                            .shadow(
+                                color: .black.opacity(frame.hasShadow ? FrameRenderer.shadowOpacity : 0),
+                                radius: FrameRenderer.shadowBlurFraction * slideWidth / 2,
+                                y: FrameRenderer.shadowOffsetFraction * slideWidth
+                            )
+                            .offset(x: mat.minX, y: mat.minY)
+                    }
+                    photoLayer(
+                        images[index], url: image.url, rect: layout.imageRects[index], slideWidth: slideWidth, hasShadow: mat == nil,
+                        blurRadius: layout.blurRadii.indices.contains(index) ? layout.blurRadii[index] : 0
+                    )
                 }
                 let boxes = textBoxes(loaded.first ?? nil, cameraNames: cameraNames, layout: layout)
                 if !boxes.isEmpty {
@@ -126,9 +149,11 @@ struct FramedPhotoView: View {
         }
     }
 
-    /// The photo scaled to fill its rect and clipped to it, the way the exporter draws a stacked photo.
+    /// The photo scaled to fill its rect and clipped to it, the way the exporter draws every photo.
     @ViewBuilder
-    private func photoLayer(_ image: CGImage?, url: URL, rect: CGRect, canvasWidth: Double) -> some View {
+    private func photoLayer(
+        _ image: CGImage?, url: URL, rect: CGRect, slideWidth: Double, hasShadow: Bool, blurRadius: Double
+    ) -> some View {
         Group {
             if let image {
                 Image(decorative: image, scale: 1)
@@ -144,11 +169,13 @@ struct FramedPhotoView: View {
             }
         }
         .frame(width: rect.width, height: rect.height)
+        // Opaque, so the blur does not fade the photo out towards its edges.
+        .blur(radius: blurRadius, opaque: true)
         .clipped()
         .shadow(
-            color: .black.opacity(frame.hasShadow ? FrameRenderer.shadowOpacity : 0),
-            radius: FrameRenderer.shadowBlurFraction * canvasWidth / 2,
-            y: FrameRenderer.shadowOffsetFraction * canvasWidth
+            color: .black.opacity(frame.hasShadow && hasShadow ? FrameRenderer.shadowOpacity : 0),
+            radius: FrameRenderer.shadowBlurFraction * slideWidth / 2,
+            y: FrameRenderer.shadowOffsetFraction * slideWidth
         )
         .offset(x: rect.minX, y: rect.minY)
     }

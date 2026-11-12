@@ -20,7 +20,7 @@ struct PhotoInfoSection: View {
                 ProgressView().controlSize(.small)
             }
         } header: {
-            Text(photo.isStack ? "Info for the top photo" : "Info")
+            Text(photo.isStack ? "Info for the top photo" : photo.isCanvas ? "Info for the first photo" : "Info")
         }
         // Reading the metadata touches the disk, which for a photo on a slow drive is worth keeping off the main thread.
         .task(id: photo.url) {

@@ -79,7 +79,7 @@ struct AutopostCommands: Commands {
                 if let id = store.selectedPostID { store.startStacking(in: id) }
             }
             .keyboardShortcut("g")
-            .disabled(!canStackSelection)
+            .disabled(!canStartStacking)
             Button("Unstack") {
                 if let id = store.selectedPostID, let photoID = stackToUnstack { store.unstackPhoto(photoID, in: id) }
             }
@@ -109,7 +109,7 @@ struct AutopostCommands: Commands {
         }
     }
 
-    private var canStackSelection: Bool {
+    private var canStartStacking: Bool {
         // Stacks the selection, or starts picking photos for a stack when the selection can't be stacked yet.
         guard store.selectedPostID != nil, !editor.isOpen else { return false }
         return (store.selectedPost?.photos.count ?? 0) >= 2

@@ -4,6 +4,12 @@ import Foundation
 import Observation
 import SwiftUI
 
+/// Which layout the grid is picking photos for, after its button was clicked with nothing usable selected.
+enum LayoutPick {
+    case stack
+    case canvas
+}
+
 /// The posts, their photos and settings, saved as JSON in Application Support.
 @MainActor @Observable
 final class LibraryStore {
@@ -14,20 +20,24 @@ final class LibraryStore {
         didSet {
             recordUndo(oldValue)
             scheduleSave()
+            if cameraNames != library.cameraNames { cameraNames = library.cameraNames }
         }
     }
+    // A copy of library.cameraNames. A view that reads `library` is redrawn on every change to any post; a photo
+    // reads this instead, so dragging one photo does not redraw all the others.
+    private(set) var cameraNames: [String: String] = [:]
     var selectedPostID: Post.ID? {
         didSet {
             if oldValue != selectedPostID {
                 selectedPhotoIDs = []
-                isPickingStack = false
+                pickingLayout = nil
             }
         }
     }
     // The photos selected in the post grid. Delete, the number keys and dragging act on these.
     var selectedPhotoIDs: Set<Photo.ID> = []
-    // True after Stack in the toolbar, while each click in the grid adds or removes a photo for the stack.
-    var isPickingStack = false
+    // Set after Stack or Canvas in the toolbar, while each click in the grid adds or removes a photo for that layout.
+    var pickingLayout: LayoutPick?
     // The post whose name is being typed in the sidebar.
     var renamingPostID: Post.ID?
     // The last change worth confirming on screen; ToastView shows it and clears it.
@@ -56,6 +66,7 @@ final class LibraryStore {
         let cutoff = Date().addingTimeInterval(-Self.deletedRetention)
         loaded.deletedPosts.removeAll { $0.deletedAt < cutoff }
         library = loaded
+        cameraNames = loaded.cameraNames
         selectedPostID = library.posts.first?.id
         backups.snapshot(fileURL)
 

@@ -29,10 +29,11 @@ extension LibraryStore {
 
     /// A new box copies the last one placed, so repeated text lands in the same spot on the next photo.
     @discardableResult
-    func addTextBox(to photoID: Photo.ID, in postID: Post.ID, text: String? = nil) -> TextBox.ID? {
+    func addTextBox(to photoID: Photo.ID, in postID: Post.ID, text: String? = nil, overCanvasImage index: Int? = nil) -> TextBox.ID? {
         guard let post = post(postID) else { return nil }
         var box = library.textBoxTemplate?.duplicated() ?? Self.firstTextBox(on: post.frame)
         if let text { box.text = text }
+        if let canvas = photo(photoID, in: postID), canvas.isCanvas { box = canvas.placingOnCanvas(box, overImage: index) }
 
         updatePhoto(photoID, in: postID) { $0.textBoxes.append(box) }
         library.textBoxTemplate = box

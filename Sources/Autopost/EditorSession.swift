@@ -9,6 +9,8 @@ final class EditorSession {
 
     var photoID: Photo.ID?
     var selectedTextBoxID: TextBox.ID?
+    // Which photo of the open canvas or stack is selected, by its place in `images`.
+    var selectedImageIndex: Int?
     var isShowingGrid = false
     // Set to ask the inspector to put the cursor in the selected box's text; the inspector clears it.
     var wantsTextFocus = false
@@ -16,9 +18,9 @@ final class EditorSession {
     var cropDraft: CropRect?
     // The shape a crop keeps while its handles are dragged; free keeps none.
     var cropShape = CropShape.free
-    // Which photo of a stack is being cropped: 0 is the top one.
+    // Which photo of a stack or canvas is being cropped, by its place in `images`: 0 is the top one of a stack.
     var cropImageIndex = 0
-    // Crops drawn for the other photos of a stack during this crop, written together when it is applied.
+    // Crops drawn for the other photos of a stack or canvas during this crop, written together when it is applied.
     private var pendingCrops: [Int: CropRect] = [:]
     var typedPosition = TypedPosition()
     // Remembered between launches, like Lightroom's filmstrip.
@@ -32,12 +34,14 @@ final class EditorSession {
     func open(_ id: Photo.ID) {
         photoID = id
         selectedTextBoxID = nil
+        selectedImageIndex = nil
         cancelCrop()
     }
 
     func close() {
         photoID = nil
         selectedTextBoxID = nil
+        selectedImageIndex = nil
         cancelCrop()
     }
 
@@ -45,16 +49,17 @@ final class EditorSession {
     // * === crop
     // * ====================================================================
 
-    /// Opens the photo in the editor, if it is not already, and starts cropping it.
-    func crop(_ photoID: Photo.ID, in store: LibraryStore, postID: Post.ID) {
-        guard let photo = store.photo(photoID, in: postID) else { return }
+    /// Opens the photo in the editor, if it is not already, and starts cropping it. `imageIndex` picks one photo
+    /// of a stack or a canvas.
+    func crop(_ photoID: Photo.ID, in store: LibraryStore, postID: Post.ID, imageIndex: Int = 0) {
+        guard let photo = store.photo(photoID, in: postID), photo.images.indices.contains(imageIndex) else { return }
         if self.photoID != photoID { open(photoID) }
         selectedTextBoxID = nil
         // A shape picked for the last photo would snap this one's crop on the first drag, so each starts free.
         cropShape = .free
-        cropImageIndex = 0
+        cropImageIndex = imageIndex
         pendingCrops = [:]
-        cropDraft = photo.crop
+        cropDraft = photo.images[imageIndex].crop
     }
 
     /// Switches the crop to another photo of the open stack, keeping what was drawn for the last one until the
@@ -88,7 +93,7 @@ final class EditorSession {
 
     func addTextBox(in store: LibraryStore, postID: Post.ID) {
         guard let photoID else { return }
-        select(store.addTextBox(to: photoID, in: postID), focusingText: true)
+        select(store.addTextBox(to: photoID, in: postID, overCanvasImage: selectedImageIndex), focusingText: true)
     }
 
     func selectedBox(in store: LibraryStore, postID: Post.ID) -> TextBox? {
@@ -110,10 +115,20 @@ final class EditorSession {
         select(nil)
     }
 
-    /// Delete in the editor: the selected text box, or else the open photo, which moves the editor on to its neighbour.
+    /// Delete in the editor: the selected text box, the selected photo of a canvas or stack, or else the open photo, which
+    /// moves the editor on to its neighbour.
     func deleteSelection(in store: LibraryStore, postID: Post.ID) {
         if selectedTextBoxID != nil {
             deleteSelectedBox(in: store, postID: postID)
+            return
+        }
+        if let photoID, let index = selectedImageIndex {
+            if store.photo(photoID, in: postID)?.isStack == true {
+                store.removeStackedPhoto(index, of: photoID, in: postID)
+            } else {
+                store.removeCanvasImage(index, of: photoID, in: postID)
+            }
+            selectedImageIndex = nil
             return
         }
         guard let photoID, let photos = store.post(postID)?.photos, let index = photos.firstIndex(where: { $0.id == photoID }) else { return }
@@ -128,8 +143,15 @@ final class EditorSession {
         if let id = store.pasteTextBox(onto: photoID, in: postID) { select(id) }
     }
 
+    /// Selects a text box, or nothing. Either way no photo of a canvas or stack stays selected.
     func select(_ boxID: TextBox.ID?, focusingText: Bool = false) {
         selectedTextBoxID = boxID
+        selectedImageIndex = nil
         wantsTextFocus = focusingText
+    }
+
+    func selectImage(_ index: Int) {
+        selectedTextBoxID = nil
+        selectedImageIndex = index
     }
 }
