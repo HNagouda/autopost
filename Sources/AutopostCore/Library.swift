@@ -43,6 +43,11 @@ public struct ExportSettings: Codable, Equatable, Sendable {
 }
 
 public struct Photo: Codable, Identifiable, Equatable, Sendable {
+    // Instagram shows one slide at a time, so a panorama over more than three slides gets too thin to read.
+    public static let maxSlideCount = 3
+    // Three landscape photos already fill a portrait slide; a fourth would be a strip.
+    public static let maxStackSize = 3
+
     public var id = UUID()
     public var url: URL
     public var adjustments = PhotoAdjustments()
@@ -50,6 +55,12 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
     public var crop = CropRect.full
     // Camera settings typed over the EXIF for this photo, or for a film scan that has none.
     public var cameraOverrides = CameraSettings()
+    // How many carousel slides the photo is spread across, 1 to maxSlideCount. Over two or more slides a wide photo
+    // scrolls past as one picture.
+    public var slideCount = 1
+    // Photos drawn below this one on the same slide, top to bottom. Their own borders and text are kept, unused,
+    // so unstacking gives back exactly the photos that went in.
+    public var stacked: [Photo] = []
 
     public init(url: URL) {
         self.url = url
@@ -66,6 +77,24 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
         let decodedCrop = try container.decode(.crop, default: CropRect.full)
         crop = decodedCrop.isValid ? decodedCrop : .full
         cameraOverrides = try container.decode(.cameraOverrides, default: CameraSettings())
+        // A stack never spans slides and never holds another stack, so a hand-edited file can't ask for either.
+        let decodedStack = try container.decode(.stacked, default: [Photo]())
+        stacked = decodedStack.prefix(Self.maxStackSize - 1).map(\.unstackedSingle)
+        let decodedSlides = try container.decode(.slideCount, default: 1)
+        slideCount = stacked.isEmpty ? min(max(decodedSlides, 1), Self.maxSlideCount) : 1
+    }
+
+    /// The photos drawn on this photo's slide, top to bottom: itself, then the ones stacked below it.
+    public var images: [Photo] { [self] + stacked }
+
+    public var isStack: Bool { !stacked.isEmpty }
+
+    /// This photo on its own, on one slide.
+    var unstackedSingle: Photo {
+        var single = self
+        single.stacked = []
+        single.slideCount = 1
+        return single
     }
 
     /// The same photo, border, crop and text as a new entry, for duplicating a post.
@@ -75,6 +104,8 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
         copy.crop = crop
         copy.cameraOverrides = cameraOverrides
         copy.textBoxes = textBoxes.map { $0.duplicated() }
+        copy.slideCount = slideCount
+        copy.stacked = stacked.map { $0.duplicated() }
         return copy
     }
 }
@@ -91,10 +122,24 @@ public struct Post: Codable, Identifiable, Equatable, Sendable {
         self.frame = frame
     }
 
+    /// The carousel as Instagram shows it: one entry per slide, so a photo spread over two slides appears twice.
+    public var slides: [Slide] {
+        photos.flatMap { photo in (0..<photo.slideCount).map { Slide(photo: photo, index: $0) } }
+    }
+
     /// The post's frame with this photo's own border and position applied.
     public func frame(for photo: Photo) -> FrameSettings {
         frame.applying(photo.adjustments)
     }
+}
+
+/// One slide of a carousel: a photo, or one part of a photo spread over several slides.
+public struct Slide: Identifiable, Equatable, Sendable {
+    public var photo: Photo
+    // Which part of the photo, counted from 0 at the left.
+    public var index: Int
+
+    public var id: String { "\(photo.id)-\(index)" }
 }
 
 public struct FramePreset: Codable, Identifiable, Equatable, Sendable {

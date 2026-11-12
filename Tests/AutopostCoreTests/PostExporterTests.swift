@@ -40,7 +40,7 @@ private func properties(of url: URL) -> [CFString: Any] {
     frame.ratio = .original
     frame.borderPercent = 0
     let target = folder.appendingPathComponent("out.jpg")
-    try PostExporter.exportPhoto(photo, to: target, frame: frame, settings: ExportSettings(), cameraNames: [:])
+    try PostExporter.exportPhoto(photo, to: [target], frame: frame, settings: ExportSettings(), cameraNames: [:])
 
     let exported = properties(of: target)
     let iptc = exported[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
@@ -53,6 +53,47 @@ private func properties(of url: URL) -> [CFString: Any] {
     #expect(iptc[kCGImagePropertyIPTCCopyrightNotice] as? String == "Harsh")
     #expect(exif[kCGImagePropertyExifBodySerialNumber] == nil)
     #expect(exif[kCGImagePropertyExifFNumber] as? Double == 2.8)
+}
+
+@Test func panoramaOverTwoSlidesWritesTwoSlidesInCarouselOrder() async throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let sourceURL = folder.appendingPathComponent("source.jpg")
+    try writeSourcePhoto(to: sourceURL)
+
+    var post = Post(name: "Alps", frame: FrameSettings())
+    var panorama = Photo(url: sourceURL)
+    panorama.slideCount = 2
+    post.photos = [panorama, Photo(url: sourceURL)]
+    var settings = ExportSettings()
+    settings.destination = folder
+    let files = try await PostExporter.export(post, settings: settings, cameraNames: [:]) { _ in }
+
+    #expect(files.map(\.lastPathComponent) == ["alps-01.jpg", "alps-02.jpg", "alps-03.jpg"])
+    for file in files {
+        #expect(properties(of: file)[kCGImagePropertyPixelWidth] as? Int == 1080)
+        #expect(properties(of: file)[kCGImagePropertyPixelHeight] as? Int == 1350)
+    }
+}
+
+@Test func stackOfTwoPhotosExportsAsOneSlide() async throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let sourceURL = folder.appendingPathComponent("source.jpg")
+    try writeSourcePhoto(to: sourceURL)
+
+    var post = Post(name: "Alps", frame: FrameSettings())
+    var stack = Photo(url: sourceURL)
+    stack.stacked = [Photo(url: sourceURL)]
+    post.photos = [stack]
+    var settings = ExportSettings()
+    settings.destination = folder
+    let files = try await PostExporter.export(post, settings: settings, cameraNames: [:]) { _ in }
+
+    #expect(files.map(\.lastPathComponent) == ["alps-01.jpg"])
+    #expect(properties(of: files[0])[kCGImagePropertyPixelHeight] as? Int == 1350)
 }
 
 @Test(arguments: [("..", "Post"), (".hidden", "hidden"), ("Trip/1", "Trip-1"), ("  ", "Post")])

@@ -17,7 +17,7 @@ public struct TextBox: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var text = "Text"
     public var fontFamily = systemFontFamily
-    // Font size as a fraction of the canvas width.
+    // Font size as a fraction of the width of one slide, which is the canvas width unless the photo spans slides.
     public var size = 0.035
     public var isBold = false
     public var isItalic = false
@@ -89,14 +89,16 @@ public enum TextBoxRenderer {
         return CTFontCreateCopyWithAttributes(bold, size, &skew, nil)
     }
 
-    private static func referenceSize(for canvasSize: CGSize) -> CGSize {
-        CGSize(width: referenceWidth, height: canvasSize.height / canvasSize.width * referenceWidth)
+    // Each slide of the canvas is referenceWidth wide, so text on a panorama is as big as on a single slide.
+    private static func referenceSize(for canvasSize: CGSize, slideCount: Int) -> CGSize {
+        let width = referenceWidth * Double(slideCount)
+        return CGSize(width: width, height: canvasSize.height / canvasSize.width * width)
     }
 
     /// Lines laid out on the reference canvas.
-    static func placedLines(for box: TextBox, canvasSize: CGSize) -> [PlacedLine] {
-        let canvasSize = referenceSize(for: canvasSize)
-        let font = font(for: box, canvasWidth: canvasSize.width)
+    static func placedLines(for box: TextBox, canvasSize: CGSize, slideCount: Int = 1) -> [PlacedLine] {
+        let canvasSize = referenceSize(for: canvasSize, slideCount: slideCount)
+        let font = font(for: box, canvasWidth: referenceWidth)
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(
@@ -125,9 +127,9 @@ public enum TextBoxRenderer {
     }
 
     /// The box's outline on the canvas, top-left origin, for selecting and dragging it.
-    public static func bounds(for box: TextBox, canvasSize: CGSize) -> CGRect {
+    public static func bounds(for box: TextBox, canvasSize: CGSize, slideCount: Int = 1) -> CGRect {
         let font = font(for: box, canvasWidth: referenceWidth)
-        let lines = placedLines(for: box, canvasSize: canvasSize)
+        let lines = placedLines(for: box, canvasSize: canvasSize, slideCount: slideCount)
         let ascent = CTFontGetAscent(font)
         let lineHeight = ascent + CTFontGetDescent(font) + CTFontGetLeading(font)
         let minX = lines.map(\.origin.x).min() ?? box.x * referenceWidth
@@ -136,18 +138,19 @@ public enum TextBoxRenderer {
 
         // A box with no visible text still needs something to grab.
         let reference = CGRect(x: minX, y: top, width: max(maxX - minX, lineHeight / 2), height: Double(lines.count) * lineHeight)
-        let scale = canvasSize.width / referenceWidth
+        let scale = canvasSize.width / (referenceWidth * Double(slideCount))
         return reference.applying(CGAffineTransform(scaleX: scale, y: scale))
     }
 
     /// Draws into a context whose origin is bottom left, as Core Graphics bitmaps are.
-    public static func draw(_ boxes: [TextBox], in context: CGContext, canvasSize: CGSize) {
-        let reference = referenceSize(for: canvasSize)
+    public static func draw(_ boxes: [TextBox], in context: CGContext, canvasSize: CGSize, slideCount: Int = 1) {
+        let reference = referenceSize(for: canvasSize, slideCount: slideCount)
+        let scale = canvasSize.width / reference.width
         context.saveGState()
-        context.scaleBy(x: canvasSize.width / referenceWidth, y: canvasSize.width / referenceWidth)
+        context.scaleBy(x: scale, y: scale)
         context.textMatrix = .identity
         for box in boxes {
-            for placed in placedLines(for: box, canvasSize: canvasSize) {
+            for placed in placedLines(for: box, canvasSize: canvasSize, slideCount: slideCount) {
                 context.textPosition = CGPoint(x: placed.origin.x, y: reference.height - placed.origin.y)
                 CTLineDraw(placed.line, context)
             }

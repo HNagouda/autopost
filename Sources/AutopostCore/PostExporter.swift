@@ -15,7 +15,7 @@ public enum ExportError: LocalizedError {
     }
 }
 
-/// Turns a post into numbered JPEGs, "Post 1/post-1-01.jpg" and onwards, in carousel order.
+/// Turns a post into numbered JPEGs, "Post 1/post-1-01.jpg" and onwards, one per slide in carousel order.
 public enum PostExporter {
     // RAW decodes take a lot of memory; a few at a time keeps a 20-photo carousel from swapping.
     static let parallelPhotos = 4
@@ -34,61 +34,81 @@ public enum PostExporter {
         let stem = slug(post.name)
         try removePreviousExports(in: folder, stem: stem)
 
-        let jobs = post.photos.enumerated().map { index, photo in
-            (photo, folder.appendingPathComponent(String(format: "%@-%02d.jpg", stem, index + 1)))
+        // A photo spread over slides writes one file per slide, so numbering counts slides, not photos.
+        var slideNumber = 0
+        let jobs = post.photos.map { photo in
+            let targets = (0..<photo.slideCount).map { _ in
+                slideNumber += 1
+                return folder.appendingPathComponent(String(format: "%@-%02d.jpg", stem, slideNumber))
+            }
+            return (photo, targets)
         }
         var finished = 0
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             var pending = jobs[...]
             for _ in 0..<min(parallelPhotos, pending.count) {
-                let (photo, target) = pending.removeFirst()
-                group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
+                let (photo, targets) = pending.removeFirst()
+                group.addTask { try exportPhoto(photo, to: targets, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
             }
             for try await _ in group {
                 finished += 1
                 progress(finished)
-                if let (photo, target) = pending.popFirst() {
-                    group.addTask { try exportPhoto(photo, to: target, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
+                if let (photo, targets) = pending.popFirst() {
+                    group.addTask { try exportPhoto(photo, to: targets, frame: post.frame(for: photo), settings: settings, cameraNames: cameraNames) }
                 }
             }
         }
 
-        return jobs.map(\.1)
+        return jobs.flatMap(\.1)
     }
 
+    /// Writes the photo's slides to `targets`, one file per slide, in order.
     public static func exportPhoto(
-        _ photo: Photo, to target: URL, frame: FrameSettings, settings: ExportSettings, cameraNames: [String: String]
+        _ photo: Photo, to targets: [URL], frame: FrameSettings, settings: ExportSettings, cameraNames: [String: String]
     ) throws {
-        let url = photo.url
-        let source = try ImageSource(url: url)
-        let caption = frame.caption(exifLine: photo.cameraSettings(exif: source.cameraSettings, cameraNames: cameraNames).line)
-        let croppedSize = photo.crop.size(of: source.pixelSize)
-        let width = canvasWidth(for: croppedSize, frame: frame, size: settings.size, hasCaption: caption != nil)
+        let sources = try photo.images.map { try ImageSource(url: $0.url) }
+        let caption = frame.caption(exifLine: photo.cameraSettings(exif: sources[0].cameraSettings, cameraNames: cameraNames).line)
+        let croppedSizes = zip(photo.images, sources).map { image, source in image.crop.size(of: source.pixelSize) }
+        let width = canvasWidth(for: photo, croppedSizes: croppedSizes, frame: frame, size: settings.size, hasCaption: caption != nil)
 
-        // Decode the whole photo at the scale the kept part needs on the canvas, then cut the crop out of it.
-        let planned = FrameLayout(imageSize: croppedSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
-        let scale = planned.imageRect.width / max(croppedSize.width, 1)
-        let longEdge = Int((max(source.pixelSize.width, source.pixelSize.height) * scale).rounded(.up))
-        guard let decoded = source.image(maxPixelSize: longEdge), let image = decoded.cropped(to: photo.crop)
-        else { throw ImageSourceError.unreadable(url) }
+        // Decode each whole photo at the scale its kept part needs on the canvas, then cut the crop out of it.
+        let planned = FrameLayout(photo: photo, imageSizes: croppedSizes, frame: frame, canvasWidth: width, hasCaption: caption != nil)
+        let images = try zip(photo.images, sources).enumerated().map { index, pair in
+            let (image, source) = pair
+            let scale = fillScale(croppedSizes[index], into: planned.imageRects[index])
+            let longEdge = Int((max(source.pixelSize.width, source.pixelSize.height) * scale).rounded(.up))
+            guard let decoded = source.image(maxPixelSize: longEdge), let cropped = decoded.cropped(to: image.crop)
+            else { throw ImageSourceError.unreadable(image.url) }
+            return cropped
+        }
 
         // RAW files can report a slightly different size than they decode to; lay out on the real pixels.
-        let decodedSize = CGSize(width: image.width, height: image.height)
-        let layout = FrameLayout(imageSize: decodedSize, frame: frame, canvasWidth: width, hasCaption: caption != nil)
-        guard let framed = FrameRenderer.render(image: image, layout: layout, frame: frame, caption: caption, textBoxes: photo.textBoxes, isSharpening: settings.isSharpening)
-        else { throw ExportError.renderFailed(url) }
+        let decodedSizes = images.map { CGSize(width: $0.width, height: $0.height) }
+        let layout = FrameLayout(photo: photo, imageSizes: decodedSizes, frame: frame, canvasWidth: width, hasCaption: caption != nil)
+        guard let framed = FrameRenderer.render(
+            images: images, layout: layout, frame: frame, caption: caption, textBoxes: photo.textBoxes, isSharpening: settings.isSharpening
+        ) else { throw ExportError.renderFailed(photo.url) }
 
-        let metadata = settings.keepsMetadata ? source.exportMetadata(stripsLocation: settings.stripsLocation) : [:]
-        try writeJPEG(framed, to: target, quality: settings.quality, metadata: metadata)
+        let metadata = settings.keepsMetadata ? sources[0].exportMetadata(stripsLocation: settings.stripsLocation) : [:]
+        for (index, target) in targets.enumerated() {
+            let slide = layout.slideCount > 1 ? FrameRenderer.slide(index, of: framed, layout: layout) : framed
+            guard let slide else { throw ExportError.renderFailed(photo.url) }
+            try writeJPEG(slide, to: target, quality: settings.quality, metadata: metadata)
+        }
     }
 
-    /// The canvas width in pixels; full resolution keeps the photo at its native size inside the frame.
-    static func canvasWidth(for pixelSize: CGSize, frame: FrameSettings, size: ExportSize, hasCaption: Bool) -> Double {
+    /// How much a photo of `size` is scaled to cover `rect`.
+    private static func fillScale(_ size: CGSize, into rect: CGRect) -> Double {
+        max(rect.width / max(size.width, 1), rect.height / max(size.height, 1))
+    }
+
+    /// The width of one slide in pixels; full resolution keeps the top photo at its native size inside the frame.
+    static func canvasWidth(for photo: Photo, croppedSizes: [CGSize], frame: FrameSettings, size: ExportSize, hasCaption: Bool) -> Double {
         if let fixed = size.fixedWidth { return Double(fixed) }
 
-        let unit = FrameLayout(imageSize: pixelSize, frame: frame, canvasWidth: 1, hasCaption: hasCaption)
-        return min((pixelSize.width / unit.imageRect.width).rounded(), maxCanvasWidth)
+        let unit = FrameLayout(photo: photo, imageSizes: croppedSizes, frame: frame, canvasWidth: 1, hasCaption: hasCaption)
+        return min((1 / fillScale(croppedSizes[0], into: unit.imageRects[0])).rounded(), maxCanvasWidth)
     }
 
     static func writeJPEG(_ image: CGImage, to url: URL, quality: Double, metadata: [CFString: Any]) throws {
