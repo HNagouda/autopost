@@ -100,7 +100,10 @@ struct ContentView: View {
     }
 
     private func subtitle(for post: Post) -> String {
-        "\(LibraryStore.photoCount(post.photos.count)) · \(post.frame.ratioLabel)"
+        // A panorama or a stack makes the slide count differ from the photo count, and Instagram counts slides.
+        let slides = post.slides.count
+        let slideCount = slides == post.photos.count ? "" : " · \(slides) slides"
+        return "\(LibraryStore.photoCount(post.photos.count))\(slideCount) · \(post.frame.ratioLabel)"
     }
 
     private func editorSubtitle(for post: Post) -> String {
@@ -177,6 +180,15 @@ struct ContentView: View {
                 // at its smallest width.
                 .frame(width: 130)
                 .help("Photo size (⇧- and ⇧+)")
+            }
+        }
+        if !editor.isOpen {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Stack", systemImage: "square.stack") {
+                    if let id = store.selectedPostID { store.startStacking(in: id) }
+                }
+                .disabled((store.selectedPost?.photos.count ?? 0) < 2)
+                .help("Put two or three photos on one slide, above each other (⌘G)")
             }
         }
         ToolbarItem(placement: .primaryAction) {

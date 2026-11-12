@@ -16,6 +16,10 @@ final class EditorSession {
     var cropDraft: CropRect?
     // The shape a crop keeps while its handles are dragged; free keeps none.
     var cropShape = CropShape.free
+    // Which photo of a stack is being cropped: 0 is the top one.
+    var cropImageIndex = 0
+    // Crops drawn for the other photos of a stack during this crop, written together when it is applied.
+    private var pendingCrops: [Int: CropRect] = [:]
     var typedPosition = TypedPosition()
     // Remembered between launches, like Lightroom's filmstrip.
     var isFilmstripShown = UserDefaults.standard.object(forKey: EditorSession.filmstripKey) as? Bool ?? true {
@@ -28,13 +32,13 @@ final class EditorSession {
     func open(_ id: Photo.ID) {
         photoID = id
         selectedTextBoxID = nil
-        cropDraft = nil
+        cancelCrop()
     }
 
     func close() {
         photoID = nil
         selectedTextBoxID = nil
-        cropDraft = nil
+        cancelCrop()
     }
 
     // * ====================================================================
@@ -48,16 +52,30 @@ final class EditorSession {
         selectedTextBoxID = nil
         // A shape picked for the last photo would snap this one's crop on the first drag, so each starts free.
         cropShape = .free
+        cropImageIndex = 0
+        pendingCrops = [:]
         cropDraft = photo.crop
+    }
+
+    /// Switches the crop to another photo of the open stack, keeping what was drawn for the last one until the
+    /// crop is applied or cancelled.
+    func cropImage(_ index: Int, in store: LibraryStore, postID: Post.ID) {
+        guard let photoID, let photo = store.photo(photoID, in: postID), photo.images.indices.contains(index) else { return }
+        pendingCrops[cropImageIndex] = cropDraft
+        cropImageIndex = index
+        cropDraft = pendingCrops[index] ?? photo.images[index].crop
     }
 
     func applyCrop(in store: LibraryStore, postID: Post.ID) {
         guard let photoID, let cropDraft else { return }
-        store.asOneUndoStep { store.updatePhoto(photoID, in: postID) { $0.crop = cropDraft } }
+        pendingCrops[cropImageIndex] = cropDraft
+        store.setCrops(pendingCrops, in: photoID, postID: postID)
+        pendingCrops = [:]
         self.cropDraft = nil
     }
 
     func cancelCrop() {
+        pendingCrops = [:]
         cropDraft = nil
     }
 

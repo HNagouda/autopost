@@ -40,6 +40,8 @@ struct InspectorView: View {
                 }
             }
 
+            LayoutInspectorSection(postID: postID)
+
             Section("Border") {
                 LabeledContent("Size") {
                     Slider(value: frame.borderPercent, in: 0...FrameLayout.maxBorderPercent)

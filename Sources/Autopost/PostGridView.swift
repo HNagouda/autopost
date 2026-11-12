@@ -71,12 +71,16 @@ struct PostGridView: View {
             receive(urls, before: nil)
         }
         .safeAreaInset(edge: .bottom) {
-            if let post, !store.selectedPhotoIDs.isEmpty {
+            if let post, store.isPickingStack {
+                StackPickingBar(post: post)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let post, !store.selectedPhotoIDs.isEmpty {
                 SelectionBar(post: post)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.2), value: store.selectedPhotoIDs.isEmpty)
+        .animation(.easeOut(duration: 0.2), value: store.isPickingStack)
         .background(WindowReader { keyboard.window = $0 })
         .onAppear { keyboard.start(store: store, editor: editor) }
         .onDisappear { keyboard.stop() }
@@ -85,7 +89,7 @@ struct PostGridView: View {
     private func tile(_ photo: Photo, index: Int, frame: FrameSettings) -> some View {
         let isSelected = store.selectedPhotoIDs.contains(photo.id)
         return VStack(spacing: 8) {
-            FramedPhotoView(photo: photo, frame: frame)
+            FramedPhotoView(photo: photo, frame: frame, showsSeams: true)
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
                 .overlay {
                     Rectangle().strokeBorder(Color.accentColor, lineWidth: isSelected ? 3 : 0)
@@ -99,8 +103,16 @@ struct PostGridView: View {
                             .padding(8)
                     }
                 }
+                .overlay(alignment: .bottom) {
+                    if let missing = missingImage(of: photo) {
+                        Button("Locate…") { store.locate(missing) }
+                            .controlSize(.small)
+                            .padding(8)
+                            .help("Find where \(missing.lastPathComponent) went. Other missing photos in that folder are found too.")
+                    }
+                }
                 .scaleEffect(isSelected ? 0.97 : 1)
-            Text("\(index + 1)  ·  \(photo.url.lastPathComponent)")
+            Text("\(index + 1)  ·  \(Self.tileLabel(photo))")
                 .font(.caption)
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .lineLimit(1)
@@ -128,6 +140,18 @@ struct PostGridView: View {
             if isTargeted { dropTarget = photo.id } else if dropTarget == photo.id { dropTarget = nil }
         }
         .contextMenu { menu(for: photo) }
+    }
+
+    /// The first photo of the tile whose file could not be opened, for Locate.
+    private func missingImage(of photo: Photo) -> URL? {
+        photo.images.map(\.url).first { thumbnails.missing.contains($0) }
+    }
+
+    /// "DSC01234.jpg", "DSC01234.jpg · 2 slides", "Stack of 3".
+    private static func tileLabel(_ photo: Photo) -> String {
+        if photo.isStack { return "Stack of \(photo.images.count)" }
+        if photo.slideCount > 1 { return "\(photo.url.lastPathComponent) · \(photo.slideCount) slides" }
+        return photo.url.lastPathComponent
     }
 
     /// A small copy of the photo, with a count when the drag carries the whole selection. Drawn from the thumbnail
@@ -172,7 +196,7 @@ struct PostGridView: View {
         }
 
         selectionAnchor = id
-        if NSEvent.modifierFlags.contains(.command) {
+        if NSEvent.modifierFlags.contains(.command) || store.isPickingStack {
             if store.selectedPhotoIDs.contains(id) { store.selectedPhotoIDs.remove(id) } else { store.selectedPhotoIDs.insert(id) }
         } else if store.selectedPhotoIDs == [id] {
             store.selectedPhotoIDs = []
@@ -201,12 +225,27 @@ struct PostGridView: View {
         Button("Make First Photo") {
             store.movePhoto(photo.id, in: postID, toPosition: 1)
         }
+        Divider()
+        if photo.isStack {
+            Button("Unstack") { store.unstackPhoto(photo.id, in: postID) }
+        } else {
+            Button("Stack Photos") { store.stackPhotos(targets, in: postID) }
+                .disabled(!store.canStack(targets, in: postID))
+            Picker("Split", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photo.id, in: postID) })) {
+                ForEach(1...Photo.maxSlideCount, id: \.self) { Text($0 == 1 ? "1 Slide" : "\($0) Slides").tag($0) }
+            }
+        }
+        Divider()
         Menu("Move to Post") {
             ForEach(store.library.posts.filter { $0.id != postID }) { other in
                 Button(other.name) { store.movePhotos(targets, from: postID, to: other.id) }
             }
         }
-        Button("Show Original in Finder") { NSWorkspace.shared.activateFileViewerSelecting([photo.url]) }
+        if let missing = missingImage(of: photo) {
+            Button("Locate…") { store.locate(missing) }
+        } else {
+            Button("Show Original in Finder") { NSWorkspace.shared.activateFileViewerSelecting([photo.url]) }
+        }
         Divider()
         Button(targets.count > 1 ? "Remove \(targets.count) Photos from Post" : "Remove from Post", role: .destructive) {
             store.removePhotos(targets, from: postID)
@@ -240,6 +279,23 @@ private struct SelectionBar: View {
             .disabled(store.library.posts.count < 2)
             if let photo = selected.first, selected.count == 1 {
                 Button("Crop", systemImage: "crop") { editor.crop(photo.id, in: store, postID: post.id) }
+            }
+            // Next to Stack, so both carousel layouts are in sight as soon as a photo is selected.
+            if let photo = selected.first, selected.count == 1, !photo.isStack {
+                Picker("Split", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photo.id, in: post.id) })) {
+                    ForEach(1...Photo.maxSlideCount, id: \.self) { Text($0 == 1 ? "1 Slide" : "\($0) Slides").tag($0) }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                .help("Split a wide photo across slides, so it scrolls past as one picture")
+            }
+            if let photo = selected.first, selected.count == 1, photo.isStack {
+                Button("Unstack", systemImage: "square.stack") { store.unstackPhoto(photo.id, in: post.id) }
+                    .help("Give each photo its own slide again (⇧⌘G)")
+            } else {
+                // Shown even when the selection can't be stacked yet, so the layout is in sight from the first click.
+                Button("Stack", systemImage: "square.stack") { store.startStacking(in: post.id) }
+                    .help("Put two or three photos on one slide, above each other (⌘G)")
             }
             Button("Remove", systemImage: "trash", role: .destructive) {
                 store.removePhotos(store.selectedPhotoIDs, from: post.id)
@@ -305,6 +361,11 @@ final class GridKeyboard {
         if event.keyCode == KeyCode.left || event.keyCode == KeyCode.right, !(event.window?.firstResponder is NSTableView) {
             return step(isForward: event.keyCode == KeyCode.right, in: post, store: store)
         }
+        if event.keyCode == KeyCode.escape, store.isPickingStack {
+            store.isPickingStack = false
+            store.selectedPhotoIDs = []
+            return true
+        }
         if event.keyCode == KeyCode.escape, !selected.isEmpty {
             store.selectedPhotoIDs = []
             return true
@@ -339,5 +400,41 @@ final class GridKeyboard {
 
         store.selectedPhotoIDs = [post.photos[index].id]
         return true
+    }
+}
+
+/// Shown while picking photos for a stack: how many are picked, and the button that stacks them.
+private struct StackPickingBar: View {
+    let post: Post
+
+    @Environment(LibraryStore.self) private var store
+
+    var body: some View {
+        let count = post.photos.filter { store.selectedPhotoIDs.contains($0.id) }.count
+
+        HStack(spacing: 14) {
+            Text("Click two or three photos to stack on one slide")
+                .fontWeight(.medium)
+            Text("\(count) picked")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Button("Cancel") {
+                store.isPickingStack = false
+                store.selectedPhotoIDs = []
+            }
+            .help("Stop picking photos (Esc)")
+            Button("Stack", systemImage: "square.stack") { store.stackPhotos(store.selectedPhotoIDs, in: post.id) }
+                .buttonStyle(.borderedProminent)
+                .disabled(!store.canStack(store.selectedPhotoIDs, in: post.id))
+                .help("Put the picked photos on one slide, above each other")
+        }
+        .controlSize(.small)
+        .fixedSize()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay { Capsule().strokeBorder(.separator, lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+        .padding(.bottom, 16)
     }
 }

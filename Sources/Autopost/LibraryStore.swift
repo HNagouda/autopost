@@ -17,10 +17,17 @@ final class LibraryStore {
         }
     }
     var selectedPostID: Post.ID? {
-        didSet { if oldValue != selectedPostID { selectedPhotoIDs = [] } }
+        didSet {
+            if oldValue != selectedPostID {
+                selectedPhotoIDs = []
+                isPickingStack = false
+            }
+        }
     }
     // The photos selected in the post grid. Delete, the number keys and dragging act on these.
     var selectedPhotoIDs: Set<Photo.ID> = []
+    // True after Stack in the toolbar, while each click in the grid adds or removes a photo for the stack.
+    var isPickingStack = false
     // The post whose name is being typed in the sidebar.
     var renamingPostID: Post.ID?
     // The last change worth confirming on screen; ToastView shows it and clears it.

@@ -21,6 +21,8 @@ struct PhotoInspector: View {
                 if let boxID = editor.selectedTextBoxID, let box = photo.textBoxes.first(where: { $0.id == boxID }) {
                     TextBoxInspector(postID: postID, photoID: photoID, box: box)
                 }
+                // Last, as in Lightroom's Metadata panel: reference, not a setting.
+                PhotoInfoSection(photo: photo)
             }
             .formStyle(.grouped)
             .amoledBackground(theme)
@@ -38,12 +40,16 @@ struct PhotoInspector: View {
                     range: 0...FrameLayout.maxBorderPercent, fractionDigits: 1, unit: "%", width: 52
                 )
             }
+            // A stack or a panorama fills its slides, so there is no free space to move it in.
             LabeledContent("Vertical") {
                 Slider(value: adjustment(\.verticalOffset, current: frame.verticalOffset), in: -1...1)
             }
+            .disabled(photo.isStack || photo.slideCount > 1)
             LabeledContent("Horizontal") {
                 Slider(value: adjustment(\.horizontalOffset, current: frame.horizontalOffset), in: -1...1)
             }
+            .disabled(photo.isStack || photo.slideCount > 1)
+            slides(photo: photo)
             LabeledContent("Crop") {
                 Button(photo.crop.isFull ? "Crop…" : "Edit Crop…") { editor.crop(photoID, in: store, postID: postID) }
                     .help("Crop this photo (C)")
@@ -56,12 +62,33 @@ struct PhotoInspector: View {
             }
             .disabled(photo.adjustments.isEmpty)
         } header: {
-            Text("This photo")
+            Text(photo.isStack ? "This stack" : "This photo")
         } footer: {
             Text(photo.adjustments.isEmpty
                  ? "Uses the post's border. Ratio and colour are shared by the whole carousel."
                  : "Adjusted for this photo only.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// How many slides the photo is spread across, or for a stack, the way back to separate photos.
+    @ViewBuilder
+    private func slides(photo: Photo) -> some View {
+        if photo.isStack {
+            LabeledContent("Stack") {
+                Button("Unstack") { store.unstackPhoto(photoID, in: postID) }
+                    .help("Give each photo its own slide again (⇧⌘G)")
+            }
+        } else {
+            LabeledContent("Slides") {
+                Picker("Slides", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photoID, in: postID) })) {
+                    ForEach(1...Photo.maxSlideCount, id: \.self) { Text("\($0)").tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Spread a wide photo across slides, so it scrolls past as one picture")
+            }
         }
     }
 

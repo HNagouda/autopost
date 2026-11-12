@@ -47,17 +47,19 @@ struct PhotoEditorView: View {
     private func canvas(photo: Photo, post: Post) -> some View {
         GeometryReader { geometry in
             let frame = post.frame(for: photo)
-            let thumbnail = thumbnails.thumbnail(for: photo.url, isLarge: true)
+            let loaded = FramedPhotoView.loadedThumbnails(for: photo, in: thumbnails, isLarge: true)
             let cameraNames = store.library.cameraNames
-            let ratio = FramedPhotoView.canvasRatio(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames)
+            let ratio = FramedPhotoView.canvasRatio(photo: photo, frame: frame, thumbnails: loaded, cameraNames: cameraNames)
             let available = CGSize(
                 width: geometry.size.width - 2 * Self.canvasPadding,
                 height: geometry.size.height - 2 * Self.canvasPadding
             )
             let width = max(min(available.width, available.height * ratio), 1)
-            let layout = FramedPhotoView.layout(photo: photo, frame: frame, thumbnail: thumbnail, cameraNames: cameraNames, width: width)
+            let layout = FramedPhotoView.layout(
+                photo: photo, frame: frame, thumbnails: loaded, cameraNames: cameraNames, slideWidth: width / Double(photo.slideCount)
+            )
 
-            FramedPhotoView(photo: photo, frame: post.frame, isLarge: true)
+            FramedPhotoView(photo: photo, frame: post.frame, isLarge: true, showsSeams: true)
                 .frame(width: width, height: width / ratio)
                 .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                 .overlay {
@@ -235,7 +237,7 @@ private struct Filmstrip: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
                     ForEach(post.photos) { photo in
-                        FramedPhotoView(photo: photo, frame: post.frame)
+                        FramedPhotoView(photo: photo, frame: post.frame, showsSeams: true)
                             .frame(height: Self.height - 24)
                             .overlay {
                                 Rectangle().strokeBorder(Color.accentColor, lineWidth: editor.photoID == photo.id ? 2.5 : 0)
