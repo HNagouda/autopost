@@ -21,6 +21,8 @@ public enum PostExporter {
     static let parallelPhotos = 4
     // Full-resolution exports from a tiny border could otherwise ask for an absurd canvas.
     static let maxCanvasWidth = 12_000.0
+    // A canvas at full resolution is never more than this many pixels in all, which is about 400 MB while it is drawn.
+    static let maxFreeCanvasPixels = 100_000_000.0
 
     public static func folder(for post: Post, settings: ExportSettings) -> URL {
         settings.destination.appendingPathComponent(safeFileName(post.name), isDirectory: true)
@@ -108,7 +110,14 @@ public enum PostExporter {
         if let fixed = size.fixedWidth { return Double(fixed) }
 
         let unit = FrameLayout(photo: photo, imageSizes: croppedSizes, frame: frame, canvasWidth: 1, hasCaption: hasCaption)
-        return min((1 / fillScale(croppedSizes[0], into: unit.imageRects[0])).rounded(), maxCanvasWidth)
+        // A canvas of many slides is drawn as one picture, so its slides share the width three slides may have.
+        let widest = maxCanvasWidth * Double(Photo.maxSlideCount) / Double(max(photo.slideCount, Photo.maxSlideCount))
+        let native = min((1 / fillScale(croppedSizes[0], into: unit.imageRects[0])).rounded(), widest)
+        guard photo.isCanvas else { return native }
+
+        // The first photo of a canvas may sit in a small box, and its native size there would make the whole canvas
+        // several gigabytes. Width w gives a canvas of w * slides by w / ratio pixels.
+        return min(native, (maxFreeCanvasPixels * unit.slideRatio / Double(photo.slideCount)).squareRoot().rounded(.down))
     }
 
     static func writeJPEG(_ image: CGImage, to url: URL, quality: Double, metadata: [CFString: Any]) throws {
@@ -139,8 +148,9 @@ public enum PostExporter {
     /// "Trip/1" -> "Trip-1", ".." -> "Post".
     static func safeFileName(_ name: String) -> String {
         let cleaned = name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        // Leading dots would hide the folder, and a name of only dots would point outside the export folder.
-        let visible = String(cleaned.drop { $0 == "." }).trimmingCharacters(in: .whitespaces)
+        // Leading dots would hide the folder, and a name of only dots would point outside the export folder. Spaces
+        // go with them, or " .." would be trimmed to ".." after the dots were checked.
+        let visible = String(cleaned.drop { $0 == "." || $0.isWhitespace }).trimmingCharacters(in: .whitespaces)
         return visible.isEmpty ? "Post" : visible
     }
 }

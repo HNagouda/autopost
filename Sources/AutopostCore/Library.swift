@@ -58,9 +58,15 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
     // How many carousel slides the photo is spread across, 1 to maxSlideCount. Over two or more slides a wide photo
     // scrolls past as one picture.
     public var slideCount = 1
-    // Photos drawn below this one on the same slide, top to bottom. Their own borders and text are kept, unused,
-    // so unstacking gives back exactly the photos that went in.
+    // Photos drawn below this one on the same slide, top to bottom, or on a canvas the other photos in drawing
+    // order. Their own borders and text are kept, unused, so a photo that leaves gets them back.
     public var stacked: [Photo] = []
+    // One box per photo of `images` when this entry is a canvas, on which the photos are placed freely across its
+    // slides. Empty for an ordinary photo, a panorama and a stack.
+    public var boxes: [CanvasBox] = []
+    // Set while a canvas is a grid: the space around and between its photos, in slide widths. The boxes are then
+    // worked out from it, so the grid re-flows when slides or photos are added. Nil when photos are placed by hand.
+    public var gridSpacing: Double?
 
     public init(url: URL) {
         self.url = url
@@ -79,20 +85,31 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
         cameraOverrides = try container.decode(.cameraOverrides, default: CameraSettings())
         // A stack never spans slides and never holds another stack, so a hand-edited file can't ask for either.
         let decodedStack = try container.decode(.stacked, default: [Photo]())
-        stacked = decodedStack.prefix(Self.maxStackSize - 1).map(\.unstackedSingle)
         let decodedSlides = try container.decode(.slideCount, default: 1)
-        slideCount = stacked.isEmpty ? min(max(decodedSlides, 1), Self.maxSlideCount) : 1
+        // A canvas needs exactly one box per photo; anything else is read as a stack or a single photo.
+        let decodedBoxes = try container.decode(.boxes, default: [CanvasBox]())
+        if !decodedBoxes.isEmpty, decodedBoxes.count == decodedStack.count + 1 {
+            stacked = decodedStack.map(\.unstackedSingle)
+            slideCount = min(max(decodedSlides, 1), Self.maxCanvasSlides)
+            boxes = decodedBoxes.map { $0.kept(onSlides: slideCount) }
+            gridSpacing = try container.decodeIfPresent(Double.self, forKey: .gridSpacing).map(CanvasGrid.clamped)
+        } else {
+            stacked = decodedStack.prefix(Self.maxStackSize - 1).map(\.unstackedSingle)
+            slideCount = stacked.isEmpty ? min(max(decodedSlides, 1), Self.maxSlideCount) : 1
+        }
     }
 
-    /// The photos drawn on this photo's slide, top to bottom: itself, then the ones stacked below it.
+    /// The photos of this entry: itself, then the ones stacked below it, or on a canvas the ones drawn over it.
     public var images: [Photo] { [self] + stacked }
 
-    public var isStack: Bool { !stacked.isEmpty }
+    public var isStack: Bool { !stacked.isEmpty && boxes.isEmpty }
 
     /// This photo on its own, on one slide.
     var unstackedSingle: Photo {
         var single = self
         single.stacked = []
+        single.boxes = []
+        single.gridSpacing = nil
         single.slideCount = 1
         return single
     }
@@ -106,6 +123,8 @@ public struct Photo: Codable, Identifiable, Equatable, Sendable {
         copy.textBoxes = textBoxes.map { $0.duplicated() }
         copy.slideCount = slideCount
         copy.stacked = stacked.map { $0.duplicated() }
+        copy.boxes = boxes
+        copy.gridSpacing = gridSpacing
         return copy
     }
 }

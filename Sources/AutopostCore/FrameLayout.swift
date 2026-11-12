@@ -18,6 +18,11 @@ public struct FrameLayout: Equatable, Sendable {
     // One rect per photo, top to bottom. A stacked photo is cropped to fill its rect.
     public var imageRects: [CGRect]
     public var captionRect: CGRect?
+    // On a canvas, one rect per photo for the border drawn around it in the frame colour; the same as its image
+    // rect when it has none. Empty for everything but a canvas.
+    public var matRects: [CGRect] = []
+    // On a canvas, how far each photo is blurred, in the canvas's own units; 0 is sharp. Empty for everything else.
+    public var blurRadii: [Double] = []
     // How many slides the canvas is cut into, side by side.
     public var slideCount = 1
 
@@ -92,10 +97,32 @@ public struct FrameLayout: Equatable, Sendable {
         captionRect = hasCaption ? Self.captionRect(below: stackRect, height: captionBand, lastSlideStart: 0) : nil
     }
 
-    /// The layout for a photo on its own, spread over slides, or stacked. `imageSizes` are the cropped sizes of
-    /// `photo.images`, in the same order.
+    /// Photos placed freely on a canvas of `slideCount` slides, each cropped to fill its box. The boxes are drawn in
+    /// order, so a later one covers an earlier one. A canvas has no caption: there is no one photo to print under.
+    public init(canvasBoxes boxes: [CanvasBox], slideCount: Int, frame: FrameSettings, canvasWidth: Double) {
+        let height = canvasWidth / (frame.ratioValue ?? Photo.canvasFallbackRatio)
+        let rects = boxes.map { CGRect(x: $0.x * canvasWidth, y: $0.y * height, width: $0.width * canvasWidth, height: $0.height * height) }
+        let canvas = CGRect(x: 0, y: 0, width: canvasWidth * Double(slideCount), height: height)
+
+        canvasSize = canvas.size
+        imageRect = rects.dropFirst().reduce(rects.first ?? canvas) { $0.union($1) }.intersection(canvas)
+        matRects = rects
+        blurRadii = boxes.map { $0.blur * CanvasBox.maxBlurFraction * canvasWidth }
+        // The border never takes more than a quarter of the box's shorter side from each edge, so a photo is left.
+        imageRects = zip(boxes, rects).map { box, rect in
+            let inset = min(box.border * canvasWidth, min(rect.width, rect.height) / 4)
+            return rect.insetBy(dx: inset, dy: inset)
+        }
+        captionRect = nil
+        self.slideCount = slideCount
+    }
+
+    /// The layout for a photo on its own, spread over slides, stacked, or a canvas. `imageSizes` are the cropped
+    /// sizes of `photo.images`, in the same order.
     public init(photo: Photo, imageSizes: [CGSize], frame: FrameSettings, canvasWidth: Double, hasCaption: Bool = false) {
-        if photo.isStack {
+        if photo.isCanvas {
+            self.init(canvasBoxes: photo.boxes, slideCount: photo.slideCount, frame: frame, canvasWidth: canvasWidth)
+        } else if photo.isStack {
             self.init(stackedImageSizes: imageSizes, frame: frame, canvasWidth: canvasWidth, hasCaption: hasCaption)
         } else {
             self.init(imageSize: imageSizes.first ?? CGSize(width: 3, height: 2), frame: frame, canvasWidth: canvasWidth,

@@ -30,9 +30,17 @@ public enum FrameRenderer {
         context.interpolationQuality = .high
         drawBackground(in: context, canvas: canvas, image: first, frame: frame)
 
-        for (image, rect) in zip(images, layout.imageRects) {
-            let photo = isSharpening ? sharpened(image) ?? image : image
-            draw(photo, filling: flipped(rect, canvasHeight: canvas.height), in: context, frame: frame, canvasWidth: canvas.width)
+        for (index, (image, rect)) in zip(images, layout.imageRects).enumerated() {
+            let radius = layout.blurRadii.indices.contains(index) ? layout.blurRadii[index] : 0
+            // The radius is in canvas pixels; the photo is blurred at its own size, before it is scaled to its rect.
+            let fill = max(rect.width / Double(image.width), rect.height / Double(image.height))
+            let sharp = isSharpening && radius == 0 ? sharpened(image) ?? image : image
+            let photo = radius > 0 ? blurred(sharp, sigma: radius / fill) ?? sharp : sharp
+            let mat = layout.matRects.indices.contains(index) && layout.matRects[index] != rect ? layout.matRects[index] : nil
+            draw(
+                photo, filling: flipped(rect, canvasHeight: canvas.height), mat: mat.map { flipped($0, canvasHeight: canvas.height) },
+                in: context, frame: frame, slideWidth: canvas.width / Double(max(layout.slideCount, 1))
+            )
         }
 
         let captionBoxes = caption.flatMap { frame.captionBox($0, in: layout) }.map { [$0] } ?? []
@@ -48,18 +56,25 @@ public enum FrameRenderer {
         return canvas.cropping(to: CGRect(x: rect.minX * scale, y: 0, width: rect.width * scale, height: Double(canvas.height)).integral)
     }
 
-    /// The photo scaled to cover `rect` and clipped to it, with the frame's shadow under the rect.
-    private static func draw(_ image: CGImage, filling rect: CGRect, in context: CGContext, frame: FrameSettings, canvasWidth: Double) {
+    /// The photo scaled to cover `rect` and clipped to it, on its border `mat` when it has one, with the frame's
+    /// shadow under the whole of it.
+    private static func draw(
+        _ image: CGImage, filling rect: CGRect, mat: CGRect?, in context: CGContext, frame: FrameSettings, slideWidth: Double
+    ) {
         if frame.hasShadow {
             context.saveGState()
             context.setShadow(
-                offset: CGSize(width: 0, height: -shadowOffsetFraction * canvasWidth),
-                blur: shadowBlurFraction * canvasWidth,
+                offset: CGSize(width: 0, height: -shadowOffsetFraction * slideWidth),
+                blur: shadowBlurFraction * slideWidth,
                 color: CGColor(gray: 0, alpha: shadowOpacity)
             )
             context.setFillColor(CGColor(gray: 0, alpha: 1))
-            context.fill(rect)
+            context.fill(mat ?? rect)
             context.restoreGState()
+        }
+        if let mat {
+            context.setFillColor(CGColor(srgbRed: frame.color.red, green: frame.color.green, blue: frame.color.blue, alpha: 1))
+            context.fill(mat)
         }
 
         let scale = max(rect.width / Double(image.width), rect.height / Double(image.height))
@@ -97,6 +112,13 @@ public enum FrameRenderer {
             .applyingGaussianBlur(sigma: blurRadiusFraction * canvas.width)
             .cropped(to: canvas)
         return ciContext.createCGImage(blurred, from: canvas)
+    }
+
+    /// The photo blurred, with its edges kept solid so no dark fringe shows where it meets the next photo.
+    private static func blurred(_ image: CGImage, sigma: Double) -> CGImage? {
+        let source = CIImage(cgImage: image)
+        let output = source.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: source.extent)
+        return ciContext.createCGImage(output, from: source.extent)
     }
 
     private static func sharpened(_ image: CGImage) -> CGImage? {
