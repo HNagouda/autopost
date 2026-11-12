@@ -2,6 +2,40 @@
 
 What changed in each version of Autopost, newest first. Every release is on the [releases page](https://github.com/HNagouda/autopost/releases) with the app to download.
 
+## 1.2.0
+
+Version 1.2 adds two carousel layouts that photographers build by hand in other apps: a wide photo spread across slides so it scrolls past as one picture, and two or three photos stacked on one slide.
+
+Libraries saved by 1.2 open in 1.1, but 1.1 doesn't know about stacks, so saving there drops every photo below the top one of a stack. Stay on 1.2 once you've stacked photos, or restore from File > Restore from Backup if it happens.
+
+### Panoramas across slides
+
+- A photo can now span 2 or 3 slides. Select it and pick Split in the bar below the grid, or set Slides in the photo's settings.
+- The photo is laid out as one wide canvas and cut into slides, so the border runs around the outside only and the picture lines up exactly where one slide meets the next.
+- With a fixed ratio the photo fills the space inside the border and is cropped to it, so the border is equally wide on every side. Crop (C) keeps that shape and picks which part shows.
+- Trim White Edges in the crop bar crops off a plain margin baked into the file, like the white border some scanning and editing apps add, which would otherwise show up as extra border on some sides.
+- The grid and the editor show a dashed line where the cut falls. The phone preview shows the real slides, so you can page across the seam.
+- A caption sits under the part of the photo in the last slide, so a seam never cuts through it. Text boxes keep the size they have on a single slide.
+- Export writes one file per slide, and the numbering counts slides, so a two-slide panorama followed by a photo exports as 01, 02 and 03.
+
+### Stacked photos
+
+- Click Stack in the toolbar, then click two or three photos and Stack again, to put them on one slide above each other. With two or three photos already selected, Stack (⌘G) stacks them straight away. ⇧⌘G unstacks them again. These are Lightroom's keys for grouping into a stack.
+- With a fixed ratio, every photo in the stack gets the same height and is cropped around its middle to fill it. With the Original ratio each photo keeps its own shape and the slide grows to fit.
+- The gap between the photos is the border width, so the stack looks the same as the border around it.
+- Cropping a stack (C) lets you pick the top, middle or bottom photo, and keeps the crop at the shape of its place in the stack. All three crops apply or cancel together.
+- While cropping a stack or a split photo, the Slides menu changes the post's aspect ratio, since the slides set the shape of the crop.
+- Unstacking gives back the photos exactly as they went in, with their own borders, crops and text.
+
+### Layout and photo info in the sidebar
+
+- The right-hand column has a Layout section that follows the grid selection: split one photo across slides, stack two or three, or unstack a stack.
+- An open photo shows an Info section at the bottom: resolution and megapixels, aspect ratio, file size, the date and time it was taken, camera, lens and exposure, and the place and location when the file has them, with a button to open the spot in Maps.
+
+### Missing photos
+
+- A photo whose file was moved or renamed shows a Locate… button on its tile and in its right-click menu. Pick the file in its new place, and every other missing photo with a file of the same name in that folder is found too, in Recently Deleted as well. Undo puts the old paths back.
+
 ## 1.1.0
 
 Version 1.1 makes Autopost quicker to drive from the keyboard, and adds cropping and editable camera settings. A short tour opens on first launch to show all of it, and you can open it again from Help > Autopost Tour.

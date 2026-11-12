@@ -37,6 +37,8 @@ With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, b
 
 `FrameLayout` decides where the photo and caption sit on the canvas. The grid, the editor, the phone preview and the exporter all call it with the same settings, so what you see in the app is what gets written. Sizes like the border, shadow and caption are fractions of the canvas width, which is why a frame looks the same at 1080 px and at full resolution.
 
+A photo spread across slides is laid out as one canvas that many slides wide, then cut into slides, by the exporter and by the phone preview alike. That is why the seam always lines up: there is only one picture, cut in two places. A stack is one slide with a rect per photo, and each photo is cropped to fill its rect.
+
 Text boxes and the caption follow the same rule through `TextBoxRenderer`, and the preview draws them with the exporter's own Core Text code. Text is laid out on a fixed 1000-unit canvas and then scaled. Fonts like SF change shape between sizes, so laying text out at the real size would make the export wider or narrower than the preview.
 
 Exports are sRGB JPEGs, 1080 px wide by default, because Instagram stores feed photos at that width and resamples anything larger itself. Light output sharpening offsets the softening from downscaling, and EXIF is kept with orientation reset. GPS and written place names are removed unless the user opts out, and serial numbers and owner names are always removed.
@@ -50,10 +52,13 @@ Sources/AutopostCore/          everything that can run without a window
   FrameSettings.swift          border, background and caption settings, plus per-photo adjustments
   CropRect.swift               a photo's crop as fractions of the photo, and the maths for dragging its handles
   CameraSettings.swift         the camera settings a caption prints, from the EXIF with the user's names and edits on top
-  FrameLayout.swift            photo and caption rects on the canvas
+  FrameLayout.swift            photo and caption rects on the canvas, for single photos, panoramas and stacks
   TextBox.swift                text boxes and the Core Text code that lays them out and draws them
   TextSnapping.swift           the grid and guide lines a dragged text box snaps to
   ImageSource.swift            ImageIO decoding (JPEG, HEIC, TIFF, camera RAW) and EXIF
+  EdgeTrim.swift               finds a plain margin baked into a photo file, for Trim White Edges
+  Relink.swift                 points photos at files that were moved, with the rest of their folder
+  PhotoInfo.swift              a photo file's size, date taken, camera, lens and location, for the Info section
   FrameRenderer.swift          draws the framed image in sRGB with Core Graphics
   PostExporter.swift           numbered JPEGs per post, a few photos in parallel
   Library.swift                posts, photos, presets, export settings, Recently Deleted
@@ -63,6 +68,7 @@ Sources/Autopost/              the SwiftUI app
   AppIdentity.swift            the bundle identifier that names Keychain items and pasteboard data
   LibraryStore.swift           the library, saved to Application Support/Autopost/library.json
   LibraryStore+Photos.swift    adding, moving, reordering and removing a post's photos
+  LibraryStore+Layouts.swift   stacking photos onto one slide and spreading one photo across slides
   LibraryBackups.swift         timestamped copies of library.json in the Backups folder next to it
   ThumbnailStore.swift         preview images, decoded once off the main thread
   ExportController.swift       runs exports, then reveals them in Finder or sends them with AirDrop
@@ -73,12 +79,14 @@ Sources/Autopost/              the SwiftUI app
   CropView.swift               the crop handles and shapes shown in the editor while cropping
   TourView.swift               the tour that opens on first launch and from the Help menu
   InspectorView.swift          frame settings for the selected post
+  LayoutInspectorSection.swift split and stack for the photos selected in the grid
   TextStyleControls.swift      font, size, style and spacing controls shared by text boxes and the caption
   SliderValueField.swift       the number beside a slider, which can also be typed into
   ClickToEndEditing.swift      ends typing in a text field when the user clicks anywhere outside it
   PhotoEditorView.swift        one photo, large, with its text boxes, a filmstrip and keyboard handling
   TextBoxOverlay.swift         selecting, dragging and snapping text boxes on the editor canvas
   PhotoInspector.swift         the open photo's own border, position, crop and camera settings, and text box styling
+  PhotoInfoSection.swift       the open photo's metadata, read only
   PhonePreviewView.swift       phone mockup panel beside the photos, feed and profile grid, light and dark
   ScrollDirectionLock.swift    keeps a trackpad scroll in the feed from sliding a carousel sideways
   InstagramAccount.swift       the optional Instagram connection, token kept in the Keychain
