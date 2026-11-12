@@ -20,7 +20,7 @@ Drop in your edits, pick a ratio, and get a whole carousel ready to post in one 
 
 Autopost was born out of necessity. I edit in Lightroom on the Mac, and Lightroom on the Mac can't export a photo with a white border. Lightroom mobile can, so every post meant editing on the Mac, opening everything again in Lightroom mobile, and exporting each photo from there with a border. I refused to install Lightroom Classic next to Lightroom just to get borders, and Photoshop would have meant framing every photo one by one. So I built the thing I wanted instead.
 
-You group photos into posts, the way you'd plan a carousel, and pick one shape for the whole post (4:5, 3:4, square and so on). Your photo is never cropped, only padded with a border. Then you export the whole post at once, or send it straight to your phone with AirDrop.
+You group photos into posts, the way you'd plan a carousel, and pick one shape for the whole post (4:5, 3:4, square and so on). A photo on its own slide is never cropped, only padded with a border. Then you export the whole post at once, or send it straight to your phone with AirDrop.
 
 In full transparency, Autopost is vibe coded. I described what I wanted and [Claude Code](https://claude.com/claude-code) wrote most of the code, while I tested every feature on my own photos and steered it. It's open source, so every line is there to read.
 
@@ -79,6 +79,7 @@ Your exported photos land in **Pictures → Autopost Exports**, in a folder per 
 - **← and →** step through the photos, and **1 to 9** moves the selected photo to that spot in the carousel. Type two digits quickly for 10 and up.
 - **C** crops the selected or open photo. Hold Shift while dragging to keep the shape, then press Return to apply or Esc to cancel.
 - **⌘G** stacks two or three selected photos on one slide, or with fewer selected lets you click the photos to stack, and **⇧⌘G** unstacks them.
+- **Canvas** in the toolbar places any number of photos freely across a run of slides. Drag a photo to move it, drag its handles to resize it, and let it cross from one slide into the next.
 - **⇧- and ⇧+** make the grid's photos smaller or larger.
 - **/** hides or shows the filmstrip in the editor.
 - **P** hides or shows the list of posts, and **⇧P** shows or hides the phone preview next to your photos.

@@ -37,7 +37,7 @@ With only the Command Line Tools installed, the build pins the macOS 26.5 SDK, b
 
 `FrameLayout` decides where the photo and caption sit on the canvas. The grid, the editor, the phone preview and the exporter all call it with the same settings, so what you see in the app is what gets written. Sizes like the border, shadow and caption are fractions of the canvas width, which is why a frame looks the same at 1080 px and at full resolution.
 
-A photo spread across slides is laid out as one canvas that many slides wide, then cut into slides, by the exporter and by the phone preview alike. That is why the seam always lines up: there is only one picture, cut in two places. A stack is one slide with a rect per photo, and each photo is cropped to fill its rect.
+A photo spread across slides is laid out as one canvas that many slides wide, then cut into slides, by the exporter and by the phone preview alike. That is why the seam always lines up: there is only one picture, cut in two places. A stack is one slide with a rect per photo, and each photo is cropped to fill its rect. A canvas is the same idea with the rects placed by hand: `Photo.boxes` holds one box per photo, in slide widths across and fractions of the slide height down, and `FrameLayout` turns them into rects on a canvas as many slides wide as the user chose.
 
 Text boxes and the caption follow the same rule through `TextBoxRenderer`, and the preview draws them with the exporter's own Core Text code. Text is laid out on a fixed 1000-unit canvas and then scaled. Fonts like SF change shape between sizes, so laying text out at the real size would make the export wider or narrower than the preview.
 
@@ -52,7 +52,10 @@ Sources/AutopostCore/          everything that can run without a window
   FrameSettings.swift          border, background and caption settings, plus per-photo adjustments
   CropRect.swift               a photo's crop as fractions of the photo, and the maths for dragging its handles
   CameraSettings.swift         the camera settings a caption prints, from the EXIF with the user's names and edits on top
-  FrameLayout.swift            photo and caption rects on the canvas, for single photos, panoramas and stacks
+  FrameLayout.swift            photo and caption rects on the canvas, for single photos, panoramas, stacks and canvases
+  Canvas.swift                 a canvas: photos placed freely across a run of slides, and the changes made to one
+  CanvasTemplate.swift         ready-made arrangements of the photos on a canvas
+  CanvasSnapping.swift         the lines a moved or resized photo on a canvas snaps to
   TextBox.swift                text boxes and the Core Text code that lays them out and draws them
   TextSnapping.swift           the grid and guide lines a dragged text box snaps to
   ImageSource.swift            ImageIO decoding (JPEG, HEIC, TIFF, camera RAW) and EXIF
@@ -65,32 +68,52 @@ Sources/AutopostCore/          everything that can run without a window
   CodableDefaults.swift        lets a library saved by an older version still load
   InstagramAPI.swift           profile, recent posts and token refresh from graph.instagram.com
 Sources/Autopost/              the SwiftUI app
+  AutopostApp.swift            the app's entry point, its window and its Settings scene
+  AutopostCommands.swift       the menu bar commands and their shortcuts
   AppIdentity.swift            the bundle identifier that names Keychain items and pasteboard data
+  AppTheme.swift               the light, dark and pure black looks of the window
+  ContentView.swift            the window: the posts, the grid or the editor, the settings sidebar, and the toolbar
+  SidebarView.swift            the list of posts and Recently Deleted
+  FileImport.swift             the photos among chosen or dropped files, with folders opened up
   LibraryStore.swift           the library, saved to Application Support/Autopost/library.json
   LibraryStore+Photos.swift    adding, moving, reordering and removing a post's photos
+  LibraryStore+TextBoxes.swift a photo's own border, position, camera settings and text boxes
   LibraryStore+Layouts.swift   stacking photos onto one slide and spreading one photo across slides
+  LibraryStore+Canvas.swift    making a canvas, moving and resizing its photos, and breaking it apart
   LibraryBackups.swift         timestamped copies of library.json in the Backups folder next to it
+  BackupsView.swift            the list of those copies, and putting one back
   ThumbnailStore.swift         preview images, decoded once off the main thread
   ExportController.swift       runs exports, then reveals them in Finder or sends them with AirDrop
-  PostGridView.swift           the photos of a post, framed, drag to reorder, plus its selection bar and keys
+  ExportInspectorSection.swift the export settings shared by all posts
+  FramedPhotoView.swift        a photo on its frame, drawn from the same FrameLayout as the export
+  PostGridView.swift           the photos of a post, framed, drag to reorder, plus its selection bar
+  GridKeyboard.swift           the grid's keys: arrows, Delete, number keys, C and zoom
   Toast.swift                  the short note under the photos after a move or delete, with Undo
   KeyCode.swift                key codes and the typed carousel position shared by the grid and editor keys
   WindowReader.swift           tells a key monitor which window its view is in
   CropView.swift               the crop handles and shapes shown in the editor while cropping
   TourView.swift               the tour that opens on first launch and from the Help menu
   InspectorView.swift          frame settings for the selected post
-  LayoutInspectorSection.swift split and stack for the photos selected in the grid
+  RatioPicker.swift            the ratio choices drawn as little frames
+  ColorSwatchRow.swift         a row of colour dots plus the system colour picker
+  LayoutInspectorSection.swift split, stack and canvas for the photos selected in the grid
   TextStyleControls.swift      font, size, style and spacing controls shared by text boxes and the caption
   SliderValueField.swift       the number beside a slider, which can also be typed into
   ClickToEndEditing.swift      ends typing in a text field when the user clicks anywhere outside it
+  EditorSession.swift          which photo is open, what is selected in it, and the crop being drawn
   PhotoEditorView.swift        one photo, large, with its text boxes, a filmstrip and keyboard handling
+  CanvasBoxOverlay.swift       selecting, moving and resizing the photos of a canvas on the editor canvas
+  CanvasInspectorSection.swift the open canvas's slides, arrangements and selected photo
+  StackOverlay.swift           swapping the photos of a stack by dragging one onto another in the editor
   TextBoxOverlay.swift         selecting, dragging and snapping text boxes on the editor canvas
   PhotoInspector.swift         the open photo's own border, position, crop and camera settings, and text box styling
   PhotoInfoSection.swift       the open photo's metadata, read only
   PhonePreviewView.swift       phone mockup panel beside the photos, feed and profile grid, light and dark
+  PhoneScreens.swift           the feed and profile screens shown inside the phone
   ScrollDirectionLock.swift    keeps a trackpad scroll in the feed from sliding a carousel sideways
   InstagramAccount.swift       the optional Instagram connection, token kept in the Keychain
-Tests/AutopostCoreTests/       layout, crop, camera settings, text, snapping, library loading, export and Instagram tests
+  InstagramSettingsView.swift  the Settings tab where the token is pasted
+Tests/AutopostCoreTests/       layout, canvas, crop, edge trim, camera settings, photo info, text, snapping, library loading, relink, export and Instagram tests
 scripts/build-app.sh           builds build/Autopost.app for Apple Silicon and Intel
 scripts/test.sh                runs the tests
 scripts/next-version.sh        prints the version the next release on main will get
