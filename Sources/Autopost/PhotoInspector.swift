@@ -15,16 +15,29 @@ struct PhotoInspector: View {
     var body: some View {
         if let post = store.post(postID), let photo = store.photo(photoID, in: postID) {
             Form {
-                adjustments(photo: photo, post: post)
-                cameraSettings(photo: photo, post: post)
+                // A canvas has no border or caption of its own: its photos are placed by hand.
+                if photo.isCanvas {
+                    CanvasInspectorSection(postID: postID, photo: photo)
+                } else {
+                    adjustments(photo: photo, post: post)
+                    cameraSettings(photo: photo, post: post)
+                }
                 textBoxes(photo: photo)
                 if let boxID = editor.selectedTextBoxID, let box = photo.textBoxes.first(where: { $0.id == boxID }) {
                     TextBoxInspector(postID: postID, photoID: photoID, box: box)
                 }
+                // Last, as in Lightroom's Metadata panel: reference, not a setting.
+                PhotoInfoSection(photo: infoPhoto(of: photo))
             }
             .formStyle(.grouped)
             .amoledBackground(theme)
         }
+    }
+
+    /// The photo the Info section describes: the selected one on a canvas, or else the open photo.
+    private func infoPhoto(of photo: Photo) -> Photo {
+        guard photo.isCanvas, let index = editor.selectedImageIndex, photo.images.indices.contains(index) else { return photo }
+        return photo.images[index]
     }
 
     private func adjustments(photo: Photo, post: Post) -> some View {
@@ -38,12 +51,16 @@ struct PhotoInspector: View {
                     range: 0...FrameLayout.maxBorderPercent, fractionDigits: 1, unit: "%", width: 52
                 )
             }
+            // A stack or a panorama fills its slides, so there is no free space to move it in.
             LabeledContent("Vertical") {
                 Slider(value: adjustment(\.verticalOffset, current: frame.verticalOffset), in: -1...1)
             }
+            .disabled(photo.isStack || photo.slideCount > 1)
             LabeledContent("Horizontal") {
                 Slider(value: adjustment(\.horizontalOffset, current: frame.horizontalOffset), in: -1...1)
             }
+            .disabled(photo.isStack || photo.slideCount > 1)
+            slides(photo: photo)
             LabeledContent("Crop") {
                 Button(photo.crop.isFull ? "Crop…" : "Edit Crop…") { editor.crop(photoID, in: store, postID: postID) }
                     .help("Crop this photo (C)")
@@ -56,12 +73,33 @@ struct PhotoInspector: View {
             }
             .disabled(photo.adjustments.isEmpty)
         } header: {
-            Text("This photo")
+            Text(photo.isStack ? "This stack" : "This photo")
         } footer: {
             Text(photo.adjustments.isEmpty
                  ? "Uses the post's border. Ratio and colour are shared by the whole carousel."
                  : "Adjusted for this photo only.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// How many slides the photo is spread across, or for a stack, the way back to separate photos.
+    @ViewBuilder
+    private func slides(photo: Photo) -> some View {
+        if photo.isStack {
+            LabeledContent("Stack") {
+                Button("Unstack") { store.unstackPhoto(photoID, in: postID) }
+                    .help("Give each photo its own slide again (⇧⌘G)")
+            }
+        } else {
+            LabeledContent("Slides") {
+                Picker("Slides", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photoID, in: postID) })) {
+                    ForEach(1...Photo.maxSlideCount, id: \.self) { Text("\($0)").tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Spread a wide photo across slides, so it scrolls past as one picture")
+            }
         }
     }
 

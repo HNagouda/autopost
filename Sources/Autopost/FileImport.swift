@@ -38,4 +38,20 @@ enum FileImport {
         panel.prompt = allowsFolders ? "Create Posts" : "Add Photos"
         return panel.runModal() == .OK ? panel.urls : []
     }
+
+    /// One photo picked to stand in for `missing`, starting in the closest folder of its old path that still exists.
+    static func chooseReplacement(for missing: URL) -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.image]
+        panel.message = "Where is \(missing.lastPathComponent)? Other missing photos in the same folder are found too."
+        panel.prompt = "Locate"
+        var folder = missing.deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: folder.path), folder.pathComponents.count > 1 {
+            folder = folder.deletingLastPathComponent()
+        }
+        panel.directoryURL = folder
+        return panel.runModal() == .OK ? panel.url : nil
+    }
 }

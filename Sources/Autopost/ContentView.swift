@@ -100,7 +100,10 @@ struct ContentView: View {
     }
 
     private func subtitle(for post: Post) -> String {
-        "\(LibraryStore.photoCount(post.photos.count)) · \(post.frame.ratioLabel)"
+        // A panorama or a stack makes the slide count differ from the photo count, and Instagram counts slides.
+        let slides = post.slides.count
+        let slideCount = slides == post.photos.count ? "" : " · \(slides) slides"
+        return "\(LibraryStore.photoCount(post.photos.count))\(slideCount) · \(post.frame.ratioLabel)"
     }
 
     private func editorSubtitle(for post: Post) -> String {
@@ -142,7 +145,7 @@ struct ContentView: View {
                     set: { isCropping in
                         guard let postID = store.selectedPostID else { return }
                         if isCropping, let photoID = editor.photoID {
-                            editor.crop(photoID, in: store, postID: postID)
+                            editor.crop(photoID, in: store, postID: postID, imageIndex: editor.selectedImageIndex ?? 0)
                         } else {
                             editor.applyCrop(in: store, postID: postID)
                         }
@@ -173,10 +176,25 @@ struct ContentView: View {
                 } maximumValueLabel: {
                     Image(systemName: "plus").imageScale(.small)
                 }
-                // Wide enough to drag comfortably, narrow enough that the four buttons still fit above the inspector
-                // at its smallest width.
-                .frame(width: 130)
+                // Wide enough to drag comfortably, narrow enough that the buttons beside it still fit in a small window.
+                .frame(width: 100)
                 .help("Photo size (⇧- and ⇧+)")
+            }
+        }
+        if !editor.isOpen {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Stack", systemImage: "square.stack") {
+                    if let id = store.selectedPostID { store.startStacking(in: id) }
+                }
+                .disabled((store.selectedPost?.photos.count ?? 0) < 2)
+                .help("Put two or three photos on one slide, above each other (⌘G)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Canvas", systemImage: "rectangle.3.group") {
+                    if let postID = store.selectedPostID, let id = store.startCanvas(in: postID) { editor.open(id) }
+                }
+                .disabled(store.selectedPost?.photos.isEmpty ?? true)
+                .help("Place photos freely across slides, so they can cross from one slide into the next")
             }
         }
         ToolbarItem(placement: .primaryAction) {

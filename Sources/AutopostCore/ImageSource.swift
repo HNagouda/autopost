@@ -20,7 +20,8 @@ public struct ImageSource {
     public let properties: [CFString: Any]
 
     public init(url: URL) throws {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+        // Photos are files on this Mac. A library that names anything else, like a web address, is not opened.
+        guard url.isFileURL, let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         else { throw ImageSourceError.unreadable(url) }
 

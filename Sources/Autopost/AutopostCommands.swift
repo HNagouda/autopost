@@ -74,6 +74,18 @@ struct AutopostCommands: Commands {
                 if let post = store.selectedPost { exporter.revealExports(of: post, settings: store.library.export) }
             }
             Divider()
+            // ⌘G and ⇧⌘G, as Lightroom's Group into Stack and Unstack.
+            Button("Stack Photos") {
+                if let id = store.selectedPostID { store.startStacking(in: id) }
+            }
+            .keyboardShortcut("g")
+            .disabled(!canStartStacking)
+            Button("Unstack") {
+                if let id = store.selectedPostID, let photoID = stackToUnstack { store.unstackPhoto(photoID, in: id) }
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(stackToUnstack == nil)
+            Divider()
             Button("Add Text Box") {
                 if let id = store.selectedPostID { editor.addTextBox(in: store, postID: id) }
             }
@@ -95,6 +107,20 @@ struct AutopostCommands: Commands {
                 ForEach(AppTheme.allCases) { Text($0.label).tag($0) }
             }
         }
+    }
+
+    private var canStartStacking: Bool {
+        // Stacks the selection, or starts picking photos for a stack when the selection can't be stacked yet.
+        guard store.selectedPostID != nil, !editor.isOpen else { return false }
+        return (store.selectedPost?.photos.count ?? 0) >= 2
+    }
+
+    /// The open photo in the editor, or the one selected photo in the grid, when it is a stack.
+    private var stackToUnstack: Photo.ID? {
+        guard let postID = store.selectedPostID else { return nil }
+        let candidate = editor.photoID ?? (store.selectedPhotoIDs.count == 1 ? store.selectedPhotoIDs.first : nil)
+        guard let candidate, store.photo(candidate, in: postID)?.isStack == true else { return nil }
+        return candidate
     }
 
     // SwiftUI text fields and editors are backed by an NSText field editor while the cursor is in them.

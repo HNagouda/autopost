@@ -107,3 +107,12 @@ func draggingPastTheOppositeSideStopsAtTheSmallestCrop(handle: CropHandle) {
         #expect(crop.height <= start.height + 0.0001)
     }
 }
+
+@Test func fillingKeepsTheMiddleOfTheCropAtTheNewShape() {
+    // A full 3:2 photo filling a 2:1 place in a stack loses a band at the top and the bottom.
+    let crop = CropRect.full.filled(toShape: 2, imageAspect: 1.5)
+
+    #expect(isClose(crop.width, 1))
+    #expect(isClose(crop.height, 0.75))
+    #expect(isClose(crop.y, 0.125))
+}

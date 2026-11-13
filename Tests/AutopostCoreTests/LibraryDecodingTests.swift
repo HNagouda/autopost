@@ -79,3 +79,38 @@ private let firstVersionLibrary = """
 
     #expect(photo.crop == .full)
 }
+
+@Test func stackNeverSpansSlidesOrHoldsAnotherStack() throws {
+    let json = """
+    {"id": "2D0F6C2E-1D1B-4C55-9C51-0B3F4C1E2A10", "url": "file:///tmp/a.jpg", "slideCount": 2, "stacked": [
+      {"id": "3D0F6C2E-1D1B-4C55-9C51-0B3F4C1E2A10", "url": "file:///tmp/b.jpg", "slideCount": 3, "stacked": [
+        {"id": "4D0F6C2E-1D1B-4C55-9C51-0B3F4C1E2A10", "url": "file:///tmp/c.jpg"}
+      ]}
+    ]}
+    """
+    let photo = try JSONDecoder().decode(Photo.self, from: Data(json.utf8))
+
+    #expect(photo.slideCount == 1)
+    #expect(photo.stacked.count == 1)
+    #expect(photo.stacked[0].slideCount == 1)
+    #expect(photo.stacked[0].stacked.isEmpty)
+}
+
+@Test func slideCountOutsideOneToThreeIsClamped() throws {
+    let json = """
+    {"id": "2D0F6C2E-1D1B-4C55-9C51-0B3F4C1E2A10", "url": "file:///tmp/a.jpg", "slideCount": 9}
+    """
+    let photo = try JSONDecoder().decode(Photo.self, from: Data(json.utf8))
+
+    #expect(photo.slideCount == Photo.maxSlideCount)
+}
+
+@Test func postListsOneSlidePerPartOfAPanorama() {
+    var post = Post(name: "Alps", frame: FrameSettings())
+    var panorama = Photo(url: URL(fileURLWithPath: "/tmp/a.jpg"))
+    panorama.slideCount = 2
+    post.photos = [Photo(url: URL(fileURLWithPath: "/tmp/b.jpg")), panorama]
+
+    #expect(post.slides.map(\.index) == [0, 0, 1])
+    #expect(post.slides[2].photo.id == panorama.id)
+}
