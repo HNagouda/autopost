@@ -25,8 +25,35 @@ final class ThumbnailStore {
     private var loading: Set<URL> = []
     private var largeOrder: [URL] = []
 
+    private struct CroppedKey: Hashable {
+        var url: URL
+        var isLarge: Bool
+    }
+
+    private struct Cropped {
+        var source: CGImage
+        var crop: CropRect
+        var image: CGImage
+    }
+
+    // The last cropped copy of each photo. Cropping makes a new image every time, and SwiftUI sends a new image to
+    // the screen again, so a view redrawn many times a second while dragging must get the same copy back.
+    @ObservationIgnored private var croppedImages: [CroppedKey: Cropped] = [:]
+
     func thumbnail(for url: URL, isLarge: Bool = false) -> Thumbnail? {
         isLarge ? largeImages[url] ?? thumbnails[url] : thumbnails[url]
+    }
+
+    /// The photo's preview with `crop` applied, the same image on every call until the crop or the preview changes.
+    func croppedImage(for url: URL, crop: CropRect, isLarge: Bool = false) -> CGImage? {
+        let key = CroppedKey(url: url, isLarge: isLarge && largeImages[url] != nil)
+        guard let source = (key.isLarge ? largeImages[url] : thumbnails[url])?.image else { return nil }
+        guard !crop.isFull else { return source }
+        if let cached = croppedImages[key], cached.source === source, cached.crop == crop { return cached.image }
+        guard let image = source.cropped(to: crop) else { return nil }
+
+        croppedImages[key] = Cropped(source: source, crop: crop, image: image)
+        return image
     }
 
     func loadLarge(_ url: URL) async {
@@ -45,7 +72,9 @@ final class ThumbnailStore {
         largeOrder.removeAll { $0 == url }
         largeOrder.append(url)
         while largeOrder.count > Self.keptLargeImages {
-            largeImages[largeOrder.removeFirst()] = nil
+            let evicted = largeOrder.removeFirst()
+            largeImages[evicted] = nil
+            croppedImages[CroppedKey(url: evicted, isLarge: true)] = nil
         }
     }
 

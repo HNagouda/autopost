@@ -85,3 +85,12 @@ import Testing
 
     #expect(abs(large.captionRect!.height - 2 * small.captionRect!.height) < 0.001)
 }
+
+@Test func textOnAPanoramaIsAsBigAsOnOneSlide() {
+    let box = TextBox()
+    let single = TextBoxRenderer.bounds(for: box, canvasSize: CGSize(width: 1080, height: 1350))
+    let panorama = TextBoxRenderer.bounds(for: box, canvasSize: CGSize(width: 2160, height: 1350), slideCount: 2)
+
+    #expect(abs(single.height - panorama.height) < 0.5)
+    #expect(abs(panorama.midX - 2160 * box.x) < 1)
+}

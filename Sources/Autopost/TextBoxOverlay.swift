@@ -33,7 +33,7 @@ struct TextBoxOverlay: View {
     }
 
     private func handle(for box: TextBox, canvasSize: CGSize) -> some View {
-        let rect = TextBoxRenderer.bounds(for: box, canvasSize: canvasSize).insetBy(dx: -Self.hitPadding, dy: -Self.hitPadding)
+        let rect = TextBoxRenderer.bounds(for: box, canvasSize: canvasSize, slideCount: layout.slideCount).insetBy(dx: -Self.hitPadding, dy: -Self.hitPadding)
         let isSelected = editor.selectedTextBoxID == box.id
 
         return Rectangle()

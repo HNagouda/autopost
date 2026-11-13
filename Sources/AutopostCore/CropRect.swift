@@ -73,6 +73,16 @@ public struct CropRect: Codable, Equatable, Sendable {
         return centered.moved(byX: 0, y: 0)
     }
 
+    /// The largest part of this crop with `shape` (width over height in pixels), centred: what a stacked photo shows
+    /// when its crop is cut down to fill its place in the stack.
+    public func filled(toShape shape: Double, imageAspect: Double) -> CropRect {
+        let ratio = shape / imageAspect
+        let isTooWide = width / height > ratio
+        let newWidth = isTooWide ? height * ratio : width
+        let newHeight = isTooWide ? height : width / ratio
+        return CropRect(x: x + (width - newWidth) / 2, y: y + (height - newHeight) / 2, width: newWidth, height: newHeight)
+    }
+
     private func resizedFreely(_ handle: CropHandle, to point: CGPoint) -> CropRect {
         var minX = x, minY = y, maxX = x + width, maxY = y + height
         if handle.movesLeft { minX = min(max(point.x, 0), maxX - Self.minimumSide) }

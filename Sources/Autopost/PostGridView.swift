@@ -71,12 +71,16 @@ struct PostGridView: View {
             receive(urls, before: nil)
         }
         .safeAreaInset(edge: .bottom) {
-            if let post, !store.selectedPhotoIDs.isEmpty {
+            if let post, let pick = store.pickingLayout {
+                LayoutPickingBar(post: post, pick: pick)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let post, !store.selectedPhotoIDs.isEmpty {
                 SelectionBar(post: post)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.2), value: store.selectedPhotoIDs.isEmpty)
+        .animation(.easeOut(duration: 0.2), value: store.pickingLayout)
         .background(WindowReader { keyboard.window = $0 })
         .onAppear { keyboard.start(store: store, editor: editor) }
         .onDisappear { keyboard.stop() }
@@ -85,7 +89,7 @@ struct PostGridView: View {
     private func tile(_ photo: Photo, index: Int, frame: FrameSettings) -> some View {
         let isSelected = store.selectedPhotoIDs.contains(photo.id)
         return VStack(spacing: 8) {
-            FramedPhotoView(photo: photo, frame: frame)
+            FramedPhotoView(photo: photo, frame: frame, showsSeams: true)
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
                 .overlay {
                     Rectangle().strokeBorder(Color.accentColor, lineWidth: isSelected ? 3 : 0)
@@ -99,8 +103,16 @@ struct PostGridView: View {
                             .padding(8)
                     }
                 }
+                .overlay(alignment: .bottom) {
+                    if let missing = missingImage(of: photo) {
+                        Button("Locate…") { store.locate(missing) }
+                            .controlSize(.small)
+                            .padding(8)
+                            .help("Find where \(missing.lastPathComponent) went. Other missing photos in that folder are found too.")
+                    }
+                }
                 .scaleEffect(isSelected ? 0.97 : 1)
-            Text("\(index + 1)  ·  \(photo.url.lastPathComponent)")
+            Text("\(index + 1)  ·  \(Self.tileLabel(photo))")
                 .font(.caption)
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .lineLimit(1)
@@ -130,11 +142,24 @@ struct PostGridView: View {
         .contextMenu { menu(for: photo) }
     }
 
+    /// The first photo of the tile whose file could not be opened, for Locate.
+    private func missingImage(of photo: Photo) -> URL? {
+        photo.images.map(\.url).first { thumbnails.missing.contains($0) }
+    }
+
+    /// "DSC01234.jpg", "DSC01234.jpg · 2 slides", "Stack of 3", "Canvas of 5 · 3 slides".
+    private static func tileLabel(_ photo: Photo) -> String {
+        if photo.isCanvas { return "Canvas of \(photo.images.count) · \(photo.slideCount == 1 ? "1 slide" : "\(photo.slideCount) slides")" }
+        if photo.isStack { return "Stack of \(photo.images.count)" }
+        if photo.slideCount > 1 { return "\(photo.url.lastPathComponent) · \(photo.slideCount) slides" }
+        return photo.url.lastPathComponent
+    }
+
     /// A small copy of the photo, with a count when the drag carries the whole selection. Drawn from the thumbnail
     /// directly, because a drag preview is rendered outside the window and has none of its environment.
     private func dragPreview(_ photo: Photo) -> some View {
         let count = store.selectedPhotoIDs.contains(photo.id) ? store.selectedPhotoIDs.count : 1
-        let image = thumbnails.thumbnail(for: photo.url).flatMap { $0.image.cropped(to: photo.crop) }
+        let image = thumbnails.croppedImage(for: photo.url, crop: photo.crop)
 
         return ZStack(alignment: .topTrailing) {
             if let image {
@@ -172,7 +197,7 @@ struct PostGridView: View {
         }
 
         selectionAnchor = id
-        if NSEvent.modifierFlags.contains(.command) {
+        if NSEvent.modifierFlags.contains(.command) || store.pickingLayout != nil {
             if store.selectedPhotoIDs.contains(id) { store.selectedPhotoIDs.remove(id) } else { store.selectedPhotoIDs.insert(id) }
         } else if store.selectedPhotoIDs == [id] {
             store.selectedPhotoIDs = []
@@ -196,17 +221,38 @@ struct PostGridView: View {
     @ViewBuilder
     private func menu(for photo: Photo) -> some View {
         let targets = store.selectedPhotoIDs.contains(photo.id) ? store.selectedPhotoIDs : [photo.id]
-        Button("Edit Photo") { editor.open(photo.id) }
-        Button("Crop Photo") { editor.crop(photo.id, in: store, postID: postID) }
+        Button(photo.isCanvas ? "Edit Canvas" : "Edit Photo") { editor.open(photo.id) }
+        if !photo.isCanvas {
+            Button("Crop Photo") { editor.crop(photo.id, in: store, postID: postID) }
+        }
         Button("Make First Photo") {
             store.movePhoto(photo.id, in: postID, toPosition: 1)
         }
+        Divider()
+        if photo.isCanvas {
+            Button("Break Canvas Apart") { store.breakCanvasApart(photo.id, in: postID) }
+        } else if photo.isStack {
+            Button("Unstack") { store.unstackPhoto(photo.id, in: postID) }
+            Button("Make Canvas") { if let id = store.makeCanvas(of: targets, in: postID) { editor.open(id) } }
+        } else {
+            Button("Stack Photos") { store.stackPhotos(targets, in: postID) }
+                .disabled(!store.canStack(targets, in: postID))
+            Button("Make Canvas") { if let id = store.makeCanvas(of: targets, in: postID) { editor.open(id) } }
+            Picker("Split", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photo.id, in: postID) })) {
+                ForEach(1...Photo.maxSlideCount, id: \.self) { Text($0 == 1 ? "1 Slide" : "\($0) Slides").tag($0) }
+            }
+        }
+        Divider()
         Menu("Move to Post") {
             ForEach(store.library.posts.filter { $0.id != postID }) { other in
                 Button(other.name) { store.movePhotos(targets, from: postID, to: other.id) }
             }
         }
-        Button("Show Original in Finder") { NSWorkspace.shared.activateFileViewerSelecting([photo.url]) }
+        if let missing = missingImage(of: photo) {
+            Button("Locate…") { store.locate(missing) }
+        } else {
+            Button("Show Original in Finder") { NSWorkspace.shared.activateFileViewerSelecting([photo.url]) }
+        }
         Divider()
         Button(targets.count > 1 ? "Remove \(targets.count) Photos from Post" : "Remove from Post", role: .destructive) {
             store.removePhotos(targets, from: postID)
@@ -227,7 +273,10 @@ private struct SelectionBar: View {
         HStack(spacing: 14) {
             Text("\(LibraryStore.photoCount(selected.count)) selected")
                 .fontWeight(.medium)
-            if selected.count == 1 {
+            if selected.count == 1, selected[0].isCanvas {
+                Text("Press 1–9 to move it there")
+                    .foregroundStyle(.secondary)
+            } else if selected.count == 1 {
                 Text("Press 1–9 to move it there, C to crop")
                     .foregroundStyle(.secondary)
             }
@@ -238,8 +287,34 @@ private struct SelectionBar: View {
             }
             .fixedSize()
             .disabled(store.library.posts.count < 2)
-            if let photo = selected.first, selected.count == 1 {
+            if let photo = selected.first, selected.count == 1, !photo.isCanvas {
                 Button("Crop", systemImage: "crop") { editor.crop(photo.id, in: store, postID: post.id) }
+            }
+            // Next to Stack, so both carousel layouts are in sight as soon as a photo is selected.
+            if let photo = selected.first, selected.count == 1, !photo.isStack, !photo.isCanvas {
+                Picker("Split", selection: Binding(get: { photo.slideCount }, set: { store.setSlideCount($0, of: photo.id, in: post.id) })) {
+                    ForEach(1...Photo.maxSlideCount, id: \.self) { Text($0 == 1 ? "1 Slide" : "\($0) Slides").tag($0) }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                .help("Split a wide photo across slides, so it scrolls past as one picture")
+            }
+            if let photo = selected.first, selected.count == 1, photo.isCanvas {
+                Button("Edit Canvas", systemImage: "rectangle.3.group") { editor.open(photo.id) }
+                    .help("Move and resize the photos on this canvas")
+                Button("Break Apart") { store.breakCanvasApart(photo.id, in: post.id) }
+                    .help("Give each photo of the canvas its own slide again")
+            } else if let photo = selected.first, selected.count == 1, photo.isStack {
+                Button("Unstack", systemImage: "square.stack") { store.unstackPhoto(photo.id, in: post.id) }
+                    .help("Give each photo its own slide again (⇧⌘G)")
+            } else {
+                Button("Canvas", systemImage: "rectangle.3.group") {
+                    if let id = store.makeCanvas(of: store.selectedPhotoIDs, in: post.id) { editor.open(id) }
+                }
+                .help("Place these photos freely across slides, so they can cross from one slide into the next")
+                // Shown even when the selection can't be stacked yet, so the layout is in sight from the first click.
+                Button("Stack", systemImage: "square.stack") { store.startStacking(in: post.id) }
+                    .help("Put two or three photos on one slide, above each other (⌘G)")
             }
             Button("Remove", systemImage: "trash", role: .destructive) {
                 store.removePhotos(store.selectedPhotoIDs, from: post.id)
@@ -259,85 +334,49 @@ private struct SelectionBar: View {
     }
 }
 
-/// Keys for the post grid: the arrows pick a photo, Delete removes, the number keys set a photo's position, C crops,
-/// and ⇧- and ⇧+ zoom.
-@MainActor
-final class GridKeyboard {
-    weak var window: NSWindow?
-    private var monitor: Any?
-    private var typedPosition = TypedPosition()
+/// Shown while picking photos for a stack or a canvas: how many are picked, and the button that makes it.
+private struct LayoutPickingBar: View {
+    let post: Post
+    let pick: LayoutPick
 
-    func start(store: LibraryStore, editor: EditorSession) {
-        stop()
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.window === self.window else { return event }
-            return self.handle(event, store: store, editor: editor) ? nil : event
+    @Environment(LibraryStore.self) private var store
+    @Environment(EditorSession.self) private var editor
+
+    var body: some View {
+        let count = post.photos.filter { store.selectedPhotoIDs.contains($0.id) }.count
+
+        HStack(spacing: 14) {
+            Text(pick == .stack ? "Click two or three photos to stack on one slide" : "Click the photos to place on a canvas")
+                .fontWeight(.medium)
+            Text("\(count) picked")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Button("Cancel") {
+                store.pickingLayout = nil
+                store.selectedPhotoIDs = []
+            }
+            .help("Stop picking photos (Esc)")
+            if pick == .stack {
+                Button("Stack", systemImage: "square.stack") { store.stackPhotos(store.selectedPhotoIDs, in: post.id) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!store.canStack(store.selectedPhotoIDs, in: post.id))
+                    .help("Put the picked photos on one slide, above each other")
+            } else {
+                Button("Make Canvas", systemImage: "rectangle.3.group") {
+                    if let id = store.makeCanvas(of: store.selectedPhotoIDs, in: post.id) { editor.open(id) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(count == 0)
+                .help("Open the picked photos on a canvas, where they can be moved and resized")
+            }
         }
-    }
-
-    func stop() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-    }
-
-    /// True when the key was used. Typing in a text field and shortcuts with ⌘, ⌥ or ⌃ pass through untouched.
-    private func handle(_ event: NSEvent, store: LibraryStore, editor: EditorSession) -> Bool {
-        guard KeyCode.hasNoShortcutModifiers(event), !KeyCode.isTyping(in: event.window), let post = store.selectedPost else { return false }
-        let selected = post.photos.filter { store.selectedPhotoIDs.contains($0.id) }
-
-        // A plain Delete only takes the whole post while the sidebar has the keyboard, so pressing it after
-        // clicking a slider in the inspector never deletes a post. ⌘⌫ is the deliberate version. A held key
-        // never repeats a delete.
-        if KeyCode.isDelete(event.keyCode) {
-            let isSidebarFocused = event.window?.firstResponder is NSTableView
-            guard isSidebarFocused || !selected.isEmpty, !event.isARepeat else { return false }
-            store.deleteSelection(isSidebarFocused: isSidebarFocused)
-            return true
-        }
-        if let digit = KeyCode.digit(event.keyCode) {
-            guard let photo = selected.first, selected.count == 1,
-                  let position = typedPosition.type(digit, photoCount: post.photos.count)
-            else { return false }
-            store.movePhoto(photo.id, in: post.id, toPosition: position)
-            return true
-        }
-        // In the sidebar the arrows belong to the post list.
-        if event.keyCode == KeyCode.left || event.keyCode == KeyCode.right, !(event.window?.firstResponder is NSTableView) {
-            return step(isForward: event.keyCode == KeyCode.right, in: post, store: store)
-        }
-        if event.keyCode == KeyCode.escape, !selected.isEmpty {
-            store.selectedPhotoIDs = []
-            return true
-        }
-
-        switch event.charactersIgnoringModifiers {
-        case "c":
-            guard let photo = selected.first, selected.count == 1 else { return false }
-            editor.crop(photo.id, in: store, postID: post.id)
-            return true
-        // Shift is required so a stray - or = never resizes the grid. With Shift held those keys type _ and +.
-        case "_" where event.modifierFlags.contains(.shift):
-            TileSize.zoom(by: -TileSize.step)
-            return true
-        case "+" where event.modifierFlags.contains(.shift):
-            TileSize.zoom(by: TileSize.step)
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Selects the photo after the selection, or before it. From nothing, forward starts at the first photo and
-    /// back at the last, so a whole carousel can be put in order from the keyboard.
-    private func step(isForward: Bool, in post: Post, store: LibraryStore) -> Bool {
-        guard !post.photos.isEmpty else { return false }
-        let first = post.photos.firstIndex { store.selectedPhotoIDs.contains($0.id) }
-        let last = post.photos.lastIndex { store.selectedPhotoIDs.contains($0.id) }
-        let index = isForward
-            ? last.map { min($0 + 1, post.photos.count - 1) } ?? 0
-            : first.map { max($0 - 1, 0) } ?? post.photos.count - 1
-
-        store.selectedPhotoIDs = [post.photos[index].id]
-        return true
+        .controlSize(.small)
+        .fixedSize()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay { Capsule().strokeBorder(.separator, lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+        .padding(.bottom, 16)
     }
 }

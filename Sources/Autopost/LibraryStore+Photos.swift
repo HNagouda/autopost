@@ -100,4 +100,15 @@ extension LibraryStore {
             deletePost(postID)
         }
     }
+
+    /// Asks where a missing photo went, then points it, and every other missing photo with its file name in the
+    /// same folder, at the new place. One undo step.
+    func locate(_ url: URL) {
+        guard let found = FileImport.chooseReplacement(for: url) else { return }
+        var changed = 0
+        asOneUndoStep {
+            changed = library.relink(url, to: found) { FileManager.default.fileExists(atPath: $0.path) }
+        }
+        toast = Toast(message: "Found \(Self.photoCount(changed))", systemImage: "checkmark.circle", undoDepth: undoDepth)
+    }
 }

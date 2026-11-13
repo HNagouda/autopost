@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 
 @testable import AutopostCore
@@ -75,7 +76,10 @@ import Testing
 }
 
 @Test func fullResolutionKeepsPhotoAtNativeWidth() {
-    let width = PostExporter.canvasWidth(for: CGSize(width: 6000, height: 4000), frame: FrameSettings(), size: .fullResolution, hasCaption: false)
+    let photo = Photo(url: URL(fileURLWithPath: "/photo.jpg"))
+    let width = PostExporter.canvasWidth(
+        for: photo, croppedSizes: [CGSize(width: 6000, height: 4000)], frame: FrameSettings(), size: .fullResolution, hasCaption: false
+    )
     let layout = FrameLayout(imageSize: CGSize(width: 6000, height: 4000), frame: FrameSettings(), canvasWidth: width)
 
     #expect(abs(layout.imageRect.width - 6000) < 1)
@@ -119,4 +123,79 @@ func shutterSpeedReadsLikeACamera(seconds: Double, label: String) {
 
     #expect(frame.uses(ultrawide))
     #expect(abs(frame.ratioValue! - 32.0 / 9.0) < 0.0001)
+}
+
+// * ====================================================================
+// * === panoramas and stacks
+// * ====================================================================
+
+@Test func panoramaOverTwoSlidesIsOneCanvasTwoSlidesWide() {
+    var frame = FrameSettings()
+    frame.borderPercent = 5
+    let layout = FrameLayout(imageSize: CGSize(width: 8000, height: 4000), frame: frame, canvasWidth: 1080, slideCount: 2)
+
+    #expect(layout.canvasSize == CGSize(width: 2160, height: 1350))
+    #expect(abs(layout.imageRect.minX - 54) < 0.001)
+    #expect(abs(layout.imageRect.maxX - 2106) < 0.001)
+    #expect(layout.slideRect(1) == CGRect(x: 1080, y: 0, width: 1080, height: 1350))
+    #expect(abs(layout.slideRatio - 0.8) < 0.000_001)
+}
+
+@Test func panoramaHasTheSameBorderOnEverySide() {
+    var frame = FrameSettings()
+    frame.borderPercent = 5
+    // A 3:2 photo over two 4:5 slides is narrower than the canvas, so fitting it would leave wide bands at the ends.
+    let layout = FrameLayout(imageSize: CGSize(width: 6000, height: 4000), frame: frame, canvasWidth: 1080, slideCount: 2)
+
+    #expect(layout.imageRect == CGRect(x: 54, y: 54, width: 2052, height: 1242))
+}
+
+@Test func panoramaCaptionSitsUnderTheLastSlideOnly() {
+    var frame = FrameSettings()
+    frame.borderPercent = 5
+    let layout = FrameLayout(imageSize: CGSize(width: 8000, height: 4000), frame: frame, canvasWidth: 1000, hasCaption: true, slideCount: 2)
+
+    #expect(layout.captionRect!.minX == 1000)
+    #expect(abs(layout.captionRect!.maxX - layout.imageRect.maxX) < 0.001)
+}
+
+@Test func stackedPhotosShareAPortraitSlideEquallyWithBorderGaps() {
+    var frame = FrameSettings()
+    frame.borderPercent = 2
+    let sizes = Array(repeating: CGSize(width: 3000, height: 2000), count: 3)
+    let layout = FrameLayout(stackedImageSizes: sizes, frame: frame, canvasWidth: 1000)
+
+    #expect(layout.canvasSize == CGSize(width: 1000, height: 1250))
+    #expect(layout.imageRects.count == 3)
+    // 1250 minus two outer borders and two gaps of 20 px, split three ways.
+    let height = (1250.0 - 4 * 20) / 3
+    for (index, rect) in layout.imageRects.enumerated() {
+        #expect(abs(rect.height - height) < 0.001)
+        #expect(abs(rect.minY - (20 + Double(index) * (height + 20))) < 0.001)
+        #expect(rect.minX == 20 && rect.width == 960)
+    }
+    #expect(abs(layout.imageRect.maxY - 1230) < 0.001)
+}
+
+@Test func stackWithTheOriginalRatioKeepsEveryPhotosShape() {
+    var frame = FrameSettings()
+    frame.ratio = .original
+    frame.borderPercent = 10
+    let layout = FrameLayout(stackedImageSizes: [CGSize(width: 3000, height: 2000), CGSize(width: 2000, height: 2000)], frame: frame, canvasWidth: 1000)
+
+    #expect(layout.imageRects[0] == CGRect(x: 100, y: 100, width: 800, height: 533.3333333333334))
+    #expect(layout.imageRects[1] == CGRect(x: 100, y: 733.3333333333334, width: 800, height: 800))
+    #expect(abs(layout.canvasSize.height - 1633.3333333333335) < 0.001)
+}
+
+@Test func stackMakesRoomForTheCaptionUnderTheLastPhoto() {
+    var frame = FrameSettings()
+    frame.borderPercent = 2
+    let sizes = Array(repeating: CGSize(width: 3000, height: 2000), count: 2)
+    let layout = FrameLayout(stackedImageSizes: sizes, frame: frame, canvasWidth: 1000, hasCaption: true)
+
+    let band = frame.captionSize * FrameLayout.captionBandPerFontSize * 1000
+    #expect(abs(layout.captionRect!.minY - layout.imageRects[1].maxY) < 0.001)
+    #expect(abs(layout.captionRect!.maxY - (1250 - 20)) < 0.001)
+    #expect(abs(layout.captionRect!.height - band) < 0.001)
 }

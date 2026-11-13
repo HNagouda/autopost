@@ -47,13 +47,16 @@ private struct FeedPost: View {
     @Environment(ThumbnailStore.self) private var thumbnails
     @State private var slide: Int? = 0
 
+    private var slides: [Slide] { post.slides }
+
     var body: some View {
         let width = PhonePreviewView.screenSize.width
         // Every slide is cropped to the first one's shape.
         let first = post.photos[0]
         let firstRatio = FramedPhotoView.canvasRatio(
-            photo: first, frame: post.frame(for: first), thumbnail: thumbnails.thumbnail(for: first.url), cameraNames: store.library.cameraNames
-        )
+            photo: first, frame: post.frame(for: first), thumbnails: FramedPhotoView.loadedThumbnails(for: first, in: thumbnails),
+            cameraNames: store.library.cameraNames
+        ) / Double(first.slideCount)
         let ratio = min(max(firstRatio, InstagramFeed.tallestRatio), InstagramFeed.widestRatio)
 
         VStack(alignment: .leading, spacing: 0) {
@@ -85,8 +88,8 @@ private struct FeedPost: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
                 // Identified by position, because the scroll position and the dots count slides.
-                ForEach(post.photos.indices, id: \.self) { index in
-                    FilledFramedPhoto(photo: post.photos[index], frame: post.frame, width: width, ratio: ratio)
+                ForEach(slides.indices, id: \.self) { index in
+                    FilledFramedPhoto(photo: slides[index].photo, slide: slides[index].index, frame: post.frame, width: width, ratio: ratio)
                 }
             }
             .scrollTargetLayout()
@@ -96,8 +99,8 @@ private struct FeedPost: View {
         .scrollIndicators(.hidden)
         .frame(width: width, height: width / ratio)
         .overlay(alignment: .topTrailing) {
-            if post.photos.count > 1 {
-                Text("\((slide ?? 0) + 1)/\(post.photos.count)")
+            if slides.count > 1 {
+                Text("\((slide ?? 0) + 1)/\(slides.count)")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 8).padding(.vertical, 4)
@@ -115,7 +118,7 @@ private struct FeedPost: View {
                 arrow("chevron.left") { slide = (slide ?? 0) - 1 }
             }
             Spacer()
-            if (slide ?? 0) < post.photos.count - 1 {
+            if (slide ?? 0) < slides.count - 1 {
                 arrow("chevron.right") { slide = (slide ?? 0) + 1 }
             }
         }
@@ -147,9 +150,9 @@ private struct FeedPost: View {
         .padding(.horizontal, 14)
         .frame(height: 46)
         .overlay {
-            if post.photos.count > 1 {
+            if slides.count > 1 {
                 HStack(spacing: 4) {
-                    ForEach(0..<post.photos.count, id: \.self) { index in
+                    ForEach(0..<slides.count, id: \.self) { index in
                         Circle()
                             .fill(index == (slide ?? 0) ? Color.accentColor : Color.secondary.opacity(0.4))
                             .frame(width: 6, height: 6)
@@ -222,7 +225,7 @@ struct ProfileScreen: View {
             ForEach(posts) { post in
                 FilledFramedPhoto(photo: post.photos[0], frame: post.frame, width: tileWidth, ratio: gridTileRatio)
                     .overlay(alignment: .topTrailing) {
-                        if post.photos.count > 1 {
+                        if post.slides.count > 1 {
                             TileBadge(symbol: carouselSymbol)
                         }
                     }
@@ -253,9 +256,11 @@ struct ProfileScreen: View {
     }
 }
 
-/// A framed photo cropped to fill a box of `ratio`, centred, the way the app crops feed slides and grid tiles.
+/// One slide of a framed photo cropped to fill a box of `ratio`, centred, the way the app crops feed slides and grid
+/// tiles. A panorama is drawn whole and slid along, so its slides meet exactly at the seams.
 struct FilledFramedPhoto: View {
     let photo: Photo
+    var slide = 0
     let frame: FrameSettings
     let width: Double
     let ratio: Double
@@ -264,17 +269,19 @@ struct FilledFramedPhoto: View {
     @Environment(ThumbnailStore.self) private var thumbnails
 
     var body: some View {
-        let photoRatio = FramedPhotoView.canvasRatio(
-            photo: photo, frame: frame.applying(photo.adjustments), thumbnail: thumbnails.thumbnail(for: photo.url), cameraNames: store.library.cameraNames
-        )
+        let slideRatio = FramedPhotoView.canvasRatio(
+            photo: photo, frame: frame.applying(photo.adjustments), thumbnails: FramedPhotoView.loadedThumbnails(for: photo, in: thumbnails),
+            cameraNames: store.library.cameraNames
+        ) / Double(photo.slideCount)
         let height = width / ratio
-        let size = photoRatio > ratio
-            ? CGSize(width: height * photoRatio, height: height)
-            : CGSize(width: width, height: width / photoRatio)
+        let size = slideRatio > ratio
+            ? CGSize(width: height * slideRatio, height: height)
+            : CGSize(width: width, height: width / slideRatio)
 
         FramedPhotoView(photo: photo, frame: frame)
-            .frame(width: size.width, height: size.height)
-            .frame(width: width, height: height)
+            .frame(width: size.width * Double(photo.slideCount), height: size.height)
+            .offset(x: (width - size.width) / 2 - size.width * Double(slide))
+            .frame(width: width, height: height, alignment: .leading)
             .clipped()
     }
 }

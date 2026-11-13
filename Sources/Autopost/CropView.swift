@@ -57,6 +57,12 @@ struct CropView: View {
     private static let handleSize = 12.0
     private static let handleHitSize = 28.0
     private static let shadeOpacity = 0.6
+    // The slide width a place's shape is measured at. FrameLayout never makes a photo less than 1 unit high, so at
+    // a slide width of 1 a third of a slide came out as 1 high and the shape as nearly square.
+    private static let shapeSlideWidth = 1000.0
+    // A crop shape is written as whole numbers like 8:5 when it is this close to such a ratio, else as 1.64:1.
+    private static let largestRatioTerm = 10
+    private static let ratioTolerance = 0.005
 
     @Environment(LibraryStore.self) private var store
     @Environment(EditorSession.self) private var editor
@@ -64,8 +70,14 @@ struct CropView: View {
     // The crop when the current drag began; every drag step is worked out from it.
     @State private var dragStart: CropRect?
 
+    // The photo of the stack being cropped, or the photo itself.
+    private var image: Photo {
+        photo.images.indices.contains(editor.cropImageIndex) ? photo.images[editor.cropImageIndex] : photo
+    }
+
     var body: some View {
-        let thumbnail = thumbnails.thumbnail(for: photo.url, isLarge: true)
+        let thumbnail = thumbnails.thumbnail(for: image.url, isLarge: true)
+        let lockedShape = filledShape()
 
         VStack(spacing: 0) {
             GeometryReader { geometry in
@@ -80,7 +92,7 @@ struct CropView: View {
                         shade(crop, size: size)
                         cropFrame(crop, size: size)
                         ForEach(CropHandle.allCases, id: \.self) { handle in
-                            handleView(handle, crop: crop, size: size, imageAspect: imageAspect)
+                            handleView(handle, crop: crop, size: size, imageAspect: imageAspect, lockedShape: lockedShape)
                         }
                     }
                     .frame(width: size.width, height: size.height)
@@ -88,9 +100,44 @@ struct CropView: View {
                     .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
-            controls(imageAspect: thumbnail.map { $0.size.width / max($0.size.height, 1) } ?? 1)
+            controls(thumbnail: thumbnail, lockedShape: lockedShape)
         }
-        .task(id: photo.url) { await thumbnails.loadLarge(photo.url) }
+        .task(id: image.url) { await thumbnails.loadLarge(image.url) }
+        // A stacked photo only ever shows the part of its crop that fills its place, so the crop starts as that part.
+        .onChange(of: lockedShape, initial: true) { fitDraft(to: lockedShape, thumbnail: thumbnail) }
+        .onChange(of: thumbnail?.size) { fitDraft(to: lockedShape, thumbnail: thumbnail) }
+        .onChange(of: editor.cropImageIndex) { fitDraft(to: lockedShape, thumbnail: thumbnail) }
+    }
+
+    /// Sets the crop to just inside a margin found in the file, kept at the locked shape when there is one.
+    private func trimEdges(thumbnail: ThumbnailStore.Thumbnail?, lockedShape: Double?) {
+        guard let thumbnail else { return }
+        guard let trimmed = EdgeTrim.crop(removingBorderOf: thumbnail.image) else {
+            store.toast = Toast(message: "No plain margin found around this photo", systemImage: "crop")
+            return
+        }
+        let imageAspect = thumbnail.size.width / max(thumbnail.size.height, 1)
+        editor.cropDraft = lockedShape.map { trimmed.filled(toShape: $0, imageAspect: imageAspect) } ?? trimmed
+    }
+
+    private func fitDraft(to lockedShape: Double?, thumbnail: ThumbnailStore.Thumbnail?) {
+        guard let lockedShape, let thumbnail, let draft = editor.cropDraft else { return }
+        editor.cropDraft = draft.filled(toShape: lockedShape, imageAspect: thumbnail.size.width / max(thumbnail.size.height, 1))
+    }
+
+    /// The shape of the open photo's place in its stack or panorama, which the crop must keep, or nil when it may be any shape.
+    /// With the original ratio the photo keeps its own shape, so its crop stays free there too.
+    private func filledShape() -> Double? {
+        guard photo.isStack || photo.isCanvas || photo.slideCount > 1, let post = store.post(postID) else { return nil }
+        let frame = post.frame(for: photo)
+        // A box on a canvas has its own shape whatever the ratio.
+        guard frame.ratioValue != nil || photo.isCanvas else { return nil }
+
+        let loaded = FramedPhotoView.loadedThumbnails(for: photo, in: thumbnails)
+        let layout = FramedPhotoView.layout(photo: photo, frame: frame, thumbnails: loaded, cameraNames: store.cameraNames, slideWidth: Self.shapeSlideWidth)
+        guard layout.imageRects.indices.contains(editor.cropImageIndex) else { return nil }
+        let rect = layout.imageRects[editor.cropImageIndex]
+        return rect.width / max(rect.height, 0.000_001)
     }
 
     /// The photo's size scaled to fit the space, with room around it.
@@ -140,7 +187,7 @@ struct CropView: View {
         )
     }
 
-    private func handleView(_ handle: CropHandle, crop: CropRect, size: CGSize, imageAspect: Double) -> some View {
+    private func handleView(_ handle: CropHandle, crop: CropRect, size: CGSize, imageAspect: Double, lockedShape: Double?) -> some View {
         let rect = crop.pixelRect(in: size)
         let center = CGPoint(x: rect.minX + handle.anchor.x * rect.width, y: rect.minY + handle.anchor.y * rect.height)
 
@@ -157,7 +204,7 @@ struct CropView: View {
                         let start = dragStart ?? crop
                         dragStart = start
                         let point = CGPoint(x: value.location.x / size.width, y: value.location.y / size.height)
-                        editor.cropDraft = start.resized(handle, to: point, shape: keptShape(start, imageAspect: imageAspect), imageAspect: imageAspect)
+                        editor.cropDraft = start.resized(handle, to: point, shape: lockedShape ?? keptShape(start, imageAspect: imageAspect), imageAspect: imageAspect)
                     }
                     .onEnded { _ in dragStart = nil }
             )
@@ -170,19 +217,43 @@ struct CropView: View {
         return start.width * imageAspect / max(start.height, CropRect.minimumSide)
     }
 
-    private func controls(imageAspect: Double) -> some View {
-        HStack(spacing: 12) {
-            Picker("Shape", selection: Binding(get: { editor.cropShape }, set: { editor.useCropShape($0, imageAspect: imageAspect) })) {
-                ForEach(CropShape.allCases) { Text($0.label).tag($0) }
+    private func controls(thumbnail: ThumbnailStore.Thumbnail?, lockedShape: Double?) -> some View {
+        let imageAspect = thumbnail.map { $0.size.width / max($0.size.height, 1) } ?? 1
+        let frame = store.post(postID)?.frame ?? FrameSettings()
+
+        return HStack(spacing: 12) {
+            if photo.isStack {
+                Picker("Photo", selection: Binding(get: { editor.cropImageIndex }, set: { editor.cropImage($0, in: store, postID: postID) })) {
+                    ForEach(photo.images.indices, id: \.self) { Text(Self.stackPlaceLabel($0, count: photo.images.count)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .help("Which photo of the stack to crop")
             }
-            .fixedSize()
-            .help("Keep the crop at this shape. With Free, hold Shift while dragging a corner to keep the current shape.")
-            Text("Shift keeps the shape · Return applies · Esc cancels")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if lockedShape == nil {
+                Picker("Shape", selection: Binding(get: { editor.cropShape }, set: { editor.useCropShape($0, imageAspect: imageAspect) })) {
+                    ForEach(CropShape.allCases) { Text($0.label).tag($0) }
+                }
+                .fixedSize()
+                .help("Keep the crop at this shape. With Free, hold Shift while dragging a corner to keep the current shape.")
+                Text("Shift keeps the shape · Return applies · Esc cancels")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let lockedShape {
+                // The crop has to keep the shape of its place, so the bar shows that shape and what sets it, with
+                // nothing to pick. The slides' own ratio is changed in the sidebar, as for every other photo.
+                Label("Crop locked to \(Self.shapeLabel(lockedShape))", systemImage: "lock.fill")
+                    .help("The crop keeps the shape of this photo's place, which is worked out from the slide ratio, the border and the layout")
+                Text("\(lockReason(slideRatio: frame.ratio.label)) · Return applies · Esc cancels")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
-            Button("Reset") { editor.cropDraft = .full }
-                .disabled(editor.cropDraft?.isFull ?? true)
+            Button("Trim White Edges") { trimEdges(thumbnail: thumbnail, lockedShape: lockedShape) }
+                .disabled(thumbnail == nil)
+                .help("Crop off a plain margin baked into the file, like the white border of a scan")
+            Button("Reset") { editor.cropDraft = lockedShape.map { CropRect.full.filled(toShape: $0, imageAspect: imageAspect) } ?? .full }
+                .disabled(editor.cropDraft == (lockedShape.map { CropRect.full.filled(toShape: $0, imageAspect: imageAspect) } ?? .full))
             Button("Cancel") { editor.cancelCrop() }
             Button("Apply Crop") { editor.applyCrop(in: store, postID: postID) }
                 .buttonStyle(.borderedProminent)
@@ -192,5 +263,28 @@ struct CropView: View {
         .padding(.vertical, 10)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// What fixes the crop's shape, in a few words for the crop bar.
+    private func lockReason(slideRatio: String) -> String {
+        if photo.isCanvas { return "Set by its box on the canvas" }
+        if photo.isStack { return "Set by \(photo.images.count) photos sharing a \(slideRatio) slide" }
+        return "Set by the \(photo.slideCount) slides of \(slideRatio) it fills"
+    }
+
+    /// 1.6 -> "8:5", 1.64 -> "1.64:1".
+    private static func shapeLabel(_ shape: Double) -> String {
+        for height in 1...largestRatioTerm {
+            let width = (shape * Double(height)).rounded()
+            if width >= 1, abs(width / Double(height) - shape) < shape * ratioTolerance { return "\(Int(width)):\(height)" }
+        }
+
+        return String(format: "%.2f:1", shape)
+    }
+
+    /// "Top", "Middle", "Bottom" for a stack of three; "Top", "Bottom" for two.
+    private static func stackPlaceLabel(_ index: Int, count: Int) -> String {
+        if index == 0 { return "Top" }
+        return index == count - 1 ? "Bottom" : "Middle"
     }
 }

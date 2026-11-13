@@ -40,6 +40,9 @@ public struct PhotoAdjustments: Codable, Equatable, Sendable {
 }
 
 public struct FrameSettings: Codable, Equatable, Sendable {
+    // A custom ratio outside this is no slide at all, and as a canvas size it would overflow the bitmap maths.
+    static let customRatioRange = 0.05...20.0
+
     public var ratio: AspectRatio = .portrait4x5
     public var customRatioWidth: Double = 4
     public var customRatioHeight: Double = 5
@@ -111,7 +114,7 @@ public struct FrameSettings: Codable, Equatable, Sendable {
     public var ratioValue: Double? {
         if ratio == .custom {
             guard customRatioWidth > 0, customRatioHeight > 0 else { return nil }
-            return customRatioWidth / customRatioHeight
+            return min(max(customRatioWidth / customRatioHeight, Self.customRatioRange.lowerBound), Self.customRatioRange.upperBound)
         }
         return ratio.fixedValue
     }
