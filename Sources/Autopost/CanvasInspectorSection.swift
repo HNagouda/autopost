@@ -106,7 +106,7 @@ struct CanvasInspectorSection: View {
                 Text(photo.images[index].url.lastPathComponent)
                     .lineLimit(1).truncationMode(.middle)
             }
-            LabeledContent("Blur") {
+            LabeledContent {
                 Toggle("Blur", isOn: Binding(get: { photo.boxes[index].blur > 0 }, set: { blur(index).wrappedValue = $0 ? CanvasBox.defaultBlur : 0 }))
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -114,6 +114,9 @@ struct CanvasInspectorSection: View {
                     .help("Blur this photo, so the photos on top of it stand out")
                 Slider(value: blur(index), in: 0...1)
                 SliderValueField(value: blur(index), range: 0...1, scale: 100, unit: "%", width: 44)
+            } label: {
+                // The switch, slider and value leave the label too little room, and it would wrap in the middle of the word.
+                Text("Blur").fixedSize()
             }
             LabeledContent("Crop") {
                 Button(photo.images[index].crop.isFull ? "Crop…" : "Edit Crop…") {
