@@ -2,6 +2,11 @@
 
 What changed in each version of Autopost, newest first. Every release is on the [releases page](https://github.com/HNagouda/autopost/releases) with the app to download.
 
+## 1.3.1
+
+- The Blur label in a canvas photo's settings stays on one line, instead of wrapping in the middle of the word.
+- The README shows panoramas, stacks and the canvas, with a new demo recording and screenshots taken in 1.3.
+
 ## 1.3.0
 
 Version 1.3 adds the canvas: a run of slides laid out as one wide picture, on which you place any number of photos freely. A photo can sit inside one slide or cross into the next, so the carousel reads as one design when it is swiped.
