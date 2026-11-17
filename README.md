@@ -12,7 +12,7 @@ Drop in your edits, pick a ratio, and get a whole carousel ready to post in one 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Free and open source](https://img.shields.io/badge/free-open%20source-blue)
 
-<img src="docs/demo.gif" alt="Autopost switching a carousel between ratios, adding a border colour, placing text in the editor, and previewing the post on a phone" width="900">
+<img src="docs/demo.gif" alt="Autopost switching a carousel between ratios, changing the border colour, stacking two photos, laying four photos out on a canvas, and previewing the post on a phone" width="900">
 
 </div>
 
@@ -29,27 +29,32 @@ In full transparency, Autopost is vibe coded. I described what I wanted and [Cla
 - **Every Instagram shape, and your own.** 4:5, 3:4, 1:1, 9:16, 1.91:1, plus wider ones like 3:2 and 16:9. Need something unusual like 32:9? Save it and it sits next to the others.
 - **Borders your way.** Any width, white, warm paper, black or any colour you like, or a soft blurred copy of the photo behind it.
 - **Crop without losing the border.** Click a photo and press C. The crop shapes the photo, and the post's ratio still decides the border around it.
+- **Panoramas across slides.** Spread a wide photo over 2 or 3 slides, so it scrolls past as one picture. The border runs around the outside only, and the photo lines up exactly where one slide meets the next.
+- **Stacks.** Put two or three photos above each other on one slide. The gap between them is as wide as the border, so the slide looks like one frame.
+- **A canvas for free layouts.** Place any number of photos across up to 20 slides, and let a photo cross from one slide into the next. Blur one as a background, give another a print border, or let Arrange lay them out as an overlay or a grid and press Shuffle until you like it.
 - **Camera settings you can edit.** Print what each photo was shot with, rename `ILCE-6400` to Sony a6400 once, or type the settings for a film scan.
 - **Text anywhere.** Double-click a photo to add a title, a film stock or a location in any font on your Mac. Text snaps neatly into place, and the next photo's text lands in the same spot, so a whole carousel lines up.
 - **A phone preview.** Swipe through the post the way your followers will, in light and dark mode, and see how it crops on your profile grid.
 - **Exports Instagram won't mangle.** JPEGs at the size and colour space Instagram expects, so it doesn't squash or shift your colours. Your location is removed from the files by default.
-- **Hard to lose work.** Deleted posts wait in Recently Deleted for 30 days, and Autopost keeps backups of your posts as you go.
+- **Hard to lose work.** Deleted posts wait in Recently Deleted for 30 days, and Autopost keeps backups of your posts as you go. If you move a photo's file, Locate finds it again, along with the other missing photos in that folder.
 - **Light, dark and pure black themes.**
+
+<p align="center"><img src="docs/screenshots/canvas-editor.png" alt="The canvas editor with five photos laid out across three slides, one of them selected" width="900"><br>A canvas of five photos across three slides. The dashed lines are where one slide ends and the next begins</p>
 
 <table>
   <tr>
-    <td width="62%"><img src="docs/screenshots/editor-grid.png" alt="The photo editor with a title placed above the photo"></td>
-    <td><img src="docs/screenshots/phone-feed-light.png" alt="Phone preview showing the post in a feed"></td>
+    <td width="62%"><img src="docs/screenshots/editor-grid.png" alt="The photo editor with a title placed on the photo"></td>
+    <td><img src="docs/screenshots/phone-feed-light.png" alt="Phone preview showing the first slide of a canvas in a feed"></td>
     <td><img src="docs/screenshots/phone-profile-dark.png" alt="Phone preview showing the profile grid in dark mode"></td>
   </tr>
   <tr>
     <td align="center">Placing text on a photo</td>
-    <td align="center">The post in a feed</td>
+    <td align="center">A canvas in a feed</td>
     <td align="center">Your profile grid, in dark mode</td>
   </tr>
 </table>
 
-<p align="center"><img src="docs/screenshots/main-amoled.png" alt="Autopost in the pure black theme" width="900"><br>The pure black theme, for checking white borders the way an OLED phone shows them</p>
+<p align="center"><img src="docs/screenshots/main-amoled.png" alt="Autopost in the pure black theme, with two panoramas among the photos of a post" width="900"><br>The pure black theme, for checking white borders the way an OLED phone shows them. Photos 4 and 6 are panoramas over two slides</p>
 
 ## Installing it
 
@@ -63,9 +68,10 @@ Autopost needs macOS 14 Sonoma or newer, and runs on both Apple Silicon and Inte
 
 1. **Make a post.** Drag a folder of photos onto the left sidebar. Each folder becomes a post, named after the folder.
 2. **Pick a shape and border** on the right. 4:5 is the safe choice for the feed. 3:4 is a little taller and fills the profile grid tile exactly.
-3. **Fine-tune single photos.** Double-click a photo to give it its own border or position, or to add text (⌘T). To spread a wide photo across 2 or 3 slides so it scrolls past as one picture, select it and pick Split in the bar below the grid.
-4. **Check it on the phone preview** (the phone button above the settings, or ⇧P).
-5. **Export.** Press ⌘E, or right-click the post and pick "Export Post As" to choose a shape and export in one go. "Export and AirDrop" sends the photos straight to your phone.
+3. **Fine-tune single photos.** Double-click a photo to give it its own border or position, or to add text (⌘T).
+4. **Lay out the slides.** Select a wide photo and pick Split in the bar below the grid to spread it across 2 or 3 slides. Select two or three photos and press ⌘G to stack them on one slide. Click Canvas in the toolbar to place photos freely across several slides.
+5. **Check it on the phone preview** (the phone button above the settings, or ⇧P).
+6. **Export.** Press ⌘E, or right-click the post and pick "Export Post As" to choose a shape and export in one go. "Export and AirDrop" sends the photos straight to your phone.
 
 The first time you open Autopost, a short tour shows the shortcuts. Help > Autopost Tour opens it again.
 
